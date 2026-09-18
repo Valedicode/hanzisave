@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800;900&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Nunito',system-ui,sans-serif;background:var(--bg);color:var(--ink);
+--bg:#F3F7F7;--panel:#FFFFFF;--ink:#14302F;--ink2:#5E7371;--line:#DCE6E5;--hover:#EAF2F1;--shadow:0 10px 30px rgba(20,48,47,.10);
+--brand:#0E9A9A;--brand-ink:#FFFFFF;--brand-soft:#D8F1F0;--brand-deep:#0A7C7C;
+--h1:#2EAE69;--h2:#8DBB3B;--h3:#E3B321;--h4:#EE8A3A;--h5:#E1573D;--h6:#BE2E42;--oov:#9AAAA9;
+--flame:#F2762E;--flame2:#FFC93C}
+body.dark{--bg:#0E1918;--panel:#162423;--ink:#EAF3F2;--ink2:#95A9A7;--line:#243836;--hover:#1D2F2E;--shadow:0 10px 30px rgba(0,0,0,.35);
+--brand:#2BC7C2;--brand-ink:#05201F;--brand-soft:#123F3D;--brand-deep:#5CDCD7;--oov:#66797A}
+a{color:var(--brand-deep);text-decoration:none}a:hover{text-decoration:underline}
+button{font-family:inherit}textarea{font-family:'Noto Sans SC','Nunito',sans-serif}
+*{box-sizing:border-box}
+@keyframes hs-fall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:.9}}
+@keyframes hs-pop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.08);opacity:1}100%{transform:scale(1)}}
+@keyframes hs-flicker{0%,100%{transform:scale(1) rotate(-3deg)}50%{transform:scale(1.08) rotate(3deg)}}
+@keyframes hs-fill{from{stroke-dashoffset:327}}
+</style>
+</helmet>
+
+<div style="min-height:100vh;display:flex;flex-direction:column;background:var(--bg);color:var(--ink)">
+
+<!-- ===== ONBOARDING CHROME ===== -->
+<sc-if value="{{ isOnboarding }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:18px 32px">
+  <div style="display:flex;align-items:center;gap:10px">
+    <div style="width:34px;height:34px;border-radius:11px;background:var(--brand);color:var(--brand-ink);font-family:'Noto Sans SC',sans-serif;font-weight:700;font-size:20px;display:grid;place-items:center">汉</div>
+    <span style="font-weight:900;font-size:18px;letter-spacing:-.01em">HanziSave</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px">
+    <span style="font-size:13px;font-weight:700;color:var(--ink2)">{{ stepLabel }}</span>
+    <button onClick="{{ toggleDark }}" style="width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink2);cursor:pointer;font-size:14px;font-weight:800" style-hover="background:var(--hover)">{{ darkGlyph }}</button>
+  </div>
+</div>
+</sc-if>
+
+<!-- ===== WELCOME ===== -->
+<sc-if value="{{ isWelcome }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;display:grid;place-items:center;padding:24px 32px 64px">
+  <div style="display:flex;flex-direction:column;align-items:center;text-align:center;max-width:560px;gap:28px">
+    <div style="position:relative;width:260px;height:170px;margin-bottom:8px">
+      <div style="position:absolute;left:18px;top:34px;width:78px;height:78px;border-radius:22px;background:var(--h1);color:#fff;display:grid;place-items:center;font-family:'Noto Sans SC',sans-serif;font-size:40px;font-weight:700;transform:rotate(-10deg);box-shadow:var(--shadow)">你</div>
+      <div style="position:absolute;left:92px;top:10px;width:92px;height:92px;border-radius:26px;background:var(--brand);color:var(--brand-ink);display:grid;place-items:center;font-family:'Noto Sans SC',sans-serif;font-size:50px;font-weight:700;box-shadow:var(--shadow);z-index:2">读</div>
+      <div style="position:absolute;left:168px;top:44px;width:74px;height:74px;border-radius:22px;background:var(--h4);color:#fff;display:grid;place-items:center;font-family:'Noto Sans SC',sans-serif;font-size:38px;font-weight:700;transform:rotate(9deg);box-shadow:var(--shadow)">趋</div>
+      <div style="position:absolute;left:60px;top:108px;width:58px;height:58px;border-radius:18px;background:var(--h3);color:#fff;display:grid;place-items:center;font-family:'Noto Sans SC',sans-serif;font-size:30px;font-weight:700;transform:rotate(6deg);box-shadow:var(--shadow)">的</div>
+      <div style="position:absolute;left:140px;top:118px;width:50px;height:50px;border-radius:16px;background:var(--h6);color:#fff;display:grid;place-items:center;font-family:'Noto Sans SC',sans-serif;font-size:26px;font-weight:700;transform:rotate(-8deg);box-shadow:var(--shadow)">势</div>
+    </div>
+    <h1 style="margin:0;font-size:44px;line-height:1.1;font-weight:900;letter-spacing:-.02em;text-wrap:balance">Turn anything you read into flashcards at your level</h1>
+    <p style="margin:0;font-size:18px;line-height:1.5;color:var(--ink2);text-wrap:pretty">Paste an article, a chat, a textbook page. HanziSave grades every word on the HSK 1–6 scale, saves the hard ones as cards, and tracks your level as you review.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+      <sc-for list="{{ hskLegend }}" as="h" hint-placeholder-count="6">
+        <span style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:var(--panel);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2)"><span style="width:10px;height:10px;border-radius:50%;background: {{ h.color }}"></span>{{ h.label }}</span>
+      </sc-for>
+    </div>
+    <button onClick="{{ goPlacement }}" style="margin-top:6px;padding:16px 36px;border-radius:16px;border:0;background:var(--brand);color:var(--brand-ink);font-size:18px;font-weight:900;cursor:pointer;box-shadow:0 8px 20px rgba(14,154,154,.3)" style-hover="filter:brightness(1.06);transform:translateY(-1px)">Get started</button>
+    <a href="#" onClick="{{ skipToApp }}" style="font-size:14px;font-weight:700">Already have an account? Sign in</a>
+  </div>
+</div>
+</sc-if>
+
+<!-- ===== PLACEMENT ===== -->
+<sc-if value="{{ isPlacement }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;justify-content:center;padding:16px 32px 64px">
+  <div style="width:100%;max-width:620px;display:flex;flex-direction:column;gap:28px">
+    <div style="display:flex;gap:6px">
+      <sc-for list="{{ placementDots }}" as="d" hint-placeholder-count="7">
+        <div style="flex:1;height:8px;border-radius:999px;background: {{ d.color }}"></div>
+      </sc-for>
+    </div>
+    <div style="text-align:center;display:flex;flex-direction:column;gap:6px">
+      <h2 style="margin:0;font-size:30px;font-weight:900;letter-spacing:-.01em">Quick level check</h2>
+      <p style="margin:0;color:var(--ink2);font-size:16px;font-weight:600">Be honest — this just sets where we start. {{ placementCounter }}</p>
+    </div>
+    <div style="background:var(--panel);border:1px solid var(--line);border-radius:28px;padding:56px 32px 44px;display:flex;flex-direction:column;align-items:center;gap:14px;box-shadow:var(--shadow);animation:hs-pop .35s ease-out">
+      <div style="font-family:'Noto Sans SC',sans-serif;font-size:72px;font-weight:500;line-height:1.1;letter-spacing:.04em">{{ placementWord }}</div>
+      <div style="font-size:15px;color:var(--ink2);font-weight:700">Do you know this word?</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <button onClick="{{ placementNo }}" style="padding:18px;border-radius:16px;border:2px solid var(--line);background:var(--panel);color:var(--ink);font-size:17px;font-weight:800;cursor:pointer" style-hover="border-color:var(--h5);color:var(--h5)">New to me</button>
+      <button onClick="{{ placementYes }}" style="padding:18px;border-radius:16px;border:2px solid var(--brand);background:var(--brand);color:var(--brand-ink);font-size:17px;font-weight:800;cursor:pointer" style-hover="filter:brightness(1.06)">I know this</button>
+    </div>
+    <div style="text-align:center"><a href="#" onClick="{{ goGoals }}" style="font-size:14px;font-weight:700;color:var(--ink2)">Skip — start at HSK 1</a></div>
+  </div>
+</div>
+</sc-if>
+
+<!-- ===== PLACEMENT RESULT ===== -->
+<sc-if value="{{ isPlacementResult }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:grid;place-items:center;padding:24px 32px 64px">
+  <div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:22px;max-width:520px;animation:hs-pop .4s ease-out">
+    <div style="position:relative;width:180px;height:180px">
+      <svg width="180" height="180" viewBox="0 0 120 120" style="transform:rotate(-90deg)">
+        <circle cx="60" cy="60" r="52" fill="none" stroke="var(--line)" stroke-width="12"></circle>
+        <circle cx="60" cy="60" r="52" fill="none" stroke="{{ estimateColor }}" stroke-width="12" stroke-linecap="round" stroke-dasharray="327" stroke-dashoffset="{{ estimateOffset }}" style="animation:hs-fill 1s ease-out"></circle>
+      </svg>
+      <div style="position:absolute;inset:0;display:grid;place-items:center"><div style="display:flex;flex-direction:column;align-items:center"><span style="font-size:13px;font-weight:800;color:var(--ink2);letter-spacing:.08em">HSK</span><span style="font-size:56px;font-weight:900;line-height:1;color: {{ estimateColor }}">{{ estimateLevel }}</span></div></div>
+    </div>
+    <h2 style="margin:0;font-size:34px;font-weight:900;letter-spacing:-.01em">You're starting at HSK {{ estimateLevel }}</h2>
+    <p style="margin:0;color:var(--ink2);font-size:17px;line-height:1.5">You knew {{ knownCount }} of 7 words. This is just a starting point — every review you do sharpens the estimate.</p>
+    <button onClick="{{ goGoals }}" style="padding:16px 36px;border-radius:16px;border:0;background:var(--brand);color:var(--brand-ink);font-size:17px;font-weight:900;cursor:pointer" style-hover="filter:brightness(1.06)">Continue</button>
+  </div>
+</div>
+</sc-if>
+
+<!-- ===== GOALS ===== -->
+<sc-if value="{{ isGoals }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;justify-content:center;padding:16px 32px 64px">
+  <div style="width:100%;max-width:620px;display:flex;flex-direction:column;gap:32px">
+    <div style="text-align:center;display:flex;flex-direction:column;gap:6px">
+      <h2 style="margin:0;font-size:30px;font-weight:900">Set a daily rhythm</h2>
+      <p style="margin:0;color:var(--ink2);font-size:16px;font-weight:600">Small and steady beats a big weekend cram.</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:13px;font-weight:800;color:var(--ink2);letter-spacing:.08em;text-transform:uppercase">Daily goal</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px">
+        <sc-for list="{{ goalOptions }}" as="g" hint-placeholder-count="4">
+          <button onClick="{{ g.pick }}" style="padding:16px 12px;border-radius:16px;cursor:pointer;display:flex;flex-direction:column;gap:2px;align-items:flex-start;text-align:left;border:2px solid {{ g.border }};background: {{ g.bg }};color:var(--ink)" style-hover="border-color:var(--brand)">
+            <span style="font-size:22px;font-weight:900;color: {{ g.numColor }}">{{ g.big }}</span>
+            <span style="font-size:13px;font-weight:700;color:var(--ink2)">{{ g.small }}</span>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:13px;font-weight:800;color:var(--ink2);letter-spacing:.08em;text-transform:uppercase">What are you reading for?</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px">
+        <sc-for list="{{ motivationOptions }}" as="m" hint-placeholder-count="5">
+          <button onClick="{{ m.pick }}" style="padding:12px 18px;border-radius:999px;cursor:pointer;font-size:15px;font-weight:800;border:2px solid {{ m.border }};background: {{ m.bg }};color: {{ m.fg }}" style-hover="border-color:var(--brand)">{{ m.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:8px">
+      <button onClick="{{ goInput }}" style="padding:16px 40px;border-radius:16px;border:0;background:var(--brand);color:var(--brand-ink);font-size:17px;font-weight:900;cursor:pointer;width:100%;max-width:320px" style-hover="filter:brightness(1.06)">Let's read</button>
+      <a href="#" onClick="{{ goInput }}" style="font-size:14px;font-weight:700;color:var(--ink2)">Skip for now</a>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<!-- ===== APP SHELL ===== -->
+<sc-if value="{{ isApp }}" hint-placeholder-val="{{ false }}">
+<header style="position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:24px;padding:12px 28px;background:var(--panel);border-bottom:1px solid var(--line)">
+  <div style="display:flex;align-items:center;gap:10px;cursor:pointer" onClick="{{ goInput }}">
+    <div style="width:34px;height:34px;border-radius:11px;background:var(--brand);color:var(--brand-ink);font-family:'Noto Sans SC',sans-serif;font-weight:700;font-size:20px;display:grid;place-items:center">汉</div>
+    <span style="font-weight:900;font-size:18px;letter-spacing:-.01em">HanziSave</span>
+  </div>
+  <nav style="display:flex;gap:4px;flex:1">
+    <sc-for list="{{ tabs }}" as="tab" hint-placeholder-count="3">
+      <button onClick="{{ tab.go }}" style="padding:9px 16px;border-radius:12px;border:0;font-size:14px;font-weight:800;cursor:pointer;background: {{ tab.bg }};color: {{ tab.fg }}" style-hover="background:var(--hover)">{{ tab.label }}</button>
+    </sc-for>
+  </nav>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div style="display:flex;align-items:center;gap:6px;padding:6px 12px 6px 8px;border-radius:999px;background:color-mix(in oklab,var(--flame) 14%,var(--panel));color:var(--flame);font-weight:900;font-size:14px" title="Day streak">
+      <span style="display:block;width:14px;height:18px;background:linear-gradient(var(--flame2),var(--flame));border-radius:50% 50% 50% 50% / 30% 30% 70% 70%;transform:rotate(180deg)"></span>{{ streak }}
+    </div>
+    <div style="padding:6px 12px;border-radius:999px;font-weight:900;font-size:13px;color:#fff;background: {{ userLevelColor }}">HSK {{ userLevel }}</div>
+    <button onClick="{{ toggleDark }}" style="width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink2);cursor:pointer;font-size:14px;font-weight:800" style-hover="background:var(--hover)">{{ darkGlyph }}</button>
+    <div style="width:34px;height:34px;border-radius:50%;background:var(--brand-soft);color:var(--brand-deep);display:grid;place-items:center;font-weight:900;font-size:14px">M</div>
+  </div>
+</header>
+
+<main style="width:100%;max-width:1160px;margin:0 auto;padding:32px 28px 72px;display:flex;flex-direction:column;gap:24px">
+
+  <!-- ===== INPUT ===== -->
+  <sc-if value="{{ isInput }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <h1 style="margin:0;font-size:32px;font-weight:900;letter-spacing:-.02em">What are you reading today?</h1>
+        <p style="margin:0;color:var(--ink2);font-size:15px;font-weight:600">Paste any Chinese text and we'll grade every word against your level.</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-radius:14px;background:var(--panel);border:1px solid var(--line)">
+        <span style="font-size:13px;font-weight:800;color:var(--ink2)">Your level</span>
+        <span style="padding:3px 10px;border-radius:999px;font-weight:900;font-size:13px;color:#fff;background: {{ userLevelColor }}">HSK {{ userLevel }}</span>
+        <div style="width:90px;height:8px;border-radius:999px;background:var(--line);overflow:hidden"><div style="height:100%;border-radius:999px;background:var(--brand);width: {{ levelPct }}"></div></div>
+        <span style="font-size:12px;font-weight:800;color:var(--ink2)">{{ levelPctLabel }} to HSK {{ nextLevel }}</span>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start">
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:24px;padding:20px;display:flex;flex-direction:column;gap:16px;box-shadow:var(--shadow)">
+        <textarea value="{{ inputText }}" onChange="{{ setInput }}" placeholder="把中文文章、聊天记录或课文粘贴到这里…  (paste Chinese text here)" style="width:100%;min-height:280px;resize:vertical;border:0;outline:0;background:transparent;color:var(--ink);font-size:20px;line-height:1.9;padding:4px"></textarea>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:16px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <button onClick="{{ loadSample }}" style="padding:10px 14px;border-radius:12px;border:2px dashed var(--line);background:transparent;color:var(--ink2);font-size:14px;font-weight:800;cursor:pointer" style-hover="border-color:var(--brand);color:var(--brand-deep)">↑ Upload a file</button>
+            <span style="font-size:13px;font-weight:700;color:var(--ink2)">{{ charCount }} characters</span>
+          </div>
+          <button onClick="{{ analyze }}" style="padding:14px 28px;border-radius:14px;border:0;background:var(--brand);color:var(--brand-ink);font-size:16px;font-weight:900;cursor:pointer;box-shadow:0 8px 20px rgba(14,154,154,.3)" style-hover="filter:brightness(1.06)">Analyze text →</button>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between"><span style="font-size:13px;font-weight:800;color:var(--ink2);letter-spacing:.08em;text-transform:uppercase">Recent texts</span><a href="#" style="font-size:13px;font-weight:700">See all</a></div>
+        <sc-for list="{{ recentTexts }}" as="r" hint-placeholder-count="3">
+          <button onClick="{{ analyze }}" style="display:flex;flex-direction:column;gap:10px;padding:14px 16px;border-radius:18px;border:1px solid var(--line);background:var(--panel);cursor:pointer;text-align:left;color:var(--ink)" style-hover="border-color:var(--brand)">
+            <div style="display:flex;justify-content:space-between;gap:8px;width:100%"><span style="font-weight:800;font-size:15px">{{ r.title }}</span><span style="font-size:12px;font-weight:700;color:var(--ink2);white-space:nowrap">{{ r.when }}</span></div>
+            <div style="font-family:'Noto Sans SC',sans-serif;font-size:14px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%">{{ r.preview }}</div>
+            <div style="display:flex;gap:2px;width:100%;height:6px;border-radius:999px;overflow:hidden">
+              <sc-for list="{{ r.dist }}" as="seg" hint-placeholder-count="6"><div style="height:100%;background: {{ seg.color }};flex: {{ seg.n }}"></div></sc-for>
+            </div>
+            <div style="font-size:12px;font-weight:700;color:var(--ink2)">{{ r.meta }}</div>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ===== ANALYSIS ===== -->
+  <sc-if value="{{ isAnalysis }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:14px">
+        <button onClick="{{ goInput }}" style="width:38px;height:38px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--ink2);cursor:pointer;font-size:18px;font-weight:800" style-hover="background:var(--hover)">←</button>
+        <div style="display:flex;flex-direction:column"><h1 style="margin:0;font-size:24px;font-weight:900;letter-spacing:-.01em">科技新闻 · AI in the workplace</h1><span style="font-size:13px;font-weight:700;color:var(--ink2)">{{ wordCount }} words · pasted just now</span></div>
+      </div>
+      <button onClick="{{ startReview }}" style="padding:12px 20px;border-radius:14px;border:0;background:var(--brand);color:var(--brand-ink);font-size:15px;font-weight:900;cursor:pointer" style-hover="filter:brightness(1.06)">Review {{ flaggedCount }} cards →</button>
+    </div>
+
+    <div style="background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:18px 22px;display:grid;grid-template-columns:minmax(0,1.4fr) auto auto;gap:28px;align-items:center">
+      <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><span style="font-size:20px;font-weight:900">This text is mostly <span style="color:var(--h3)">HSK 3</span>–<span style="color:var(--h4)">4</span></span><span style="font-size:14px;font-weight:700;color:var(--ink2)">— a good stretch for you</span></div>
+        <div style="display:flex;gap:3px;height:12px;border-radius:999px;overflow:hidden">
+          <sc-for list="{{ distribution }}" as="seg" hint-placeholder-count="7"><div title="{{ seg.title }}" style="height:100%;background: {{ seg.color }};flex: {{ seg.n }}"></div></sc-for>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <sc-for list="{{ legend }}" as="h" hint-placeholder-count="7">
+            <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;color:var(--ink2)"><span style="width:10px;height:10px;border-radius:3px;background: {{ h.color }};border: {{ h.border }}"></span>{{ h.label }} <span style="opacity:.7">{{ h.n }}</span></span>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px;padding-left:28px;border-left:1px solid var(--line)"><span style="font-size:30px;font-weight:900;line-height:1;color:var(--h5)">{{ aboveCount }}</span><span style="font-size:13px;font-weight:700;color:var(--ink2)">words above<br>your level</span></div>
+      <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:30px;font-weight:900;line-height:1;color:var(--brand-deep)">{{ flaggedCount }}</span><span style="font-size:13px;font-weight:700;color:var(--ink2)">flagged for<br>flashcards</span></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;align-items:start">
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:24px;padding:36px 40px;display:flex;flex-direction:column;gap:20px">
+        <div style="font-family:'Noto Sans SC',sans-serif;font-size:27px;line-height:2.3;font-weight:400;letter-spacing:.02em;text-wrap:pretty">
+          <sc-for list="{{ tokens }}" as="tok" hint-placeholder-count="30">
+            <span style="position:relative;display:inline-block">
+              <span onClick="{{ tok.select }}" style="display:inline-block;padding:0 1px;border-radius:6px;cursor: {{ tok.cursor }};border-bottom: {{ tok.underline }};background: {{ tok.bg }};color: {{ tok.fg }}" style-hover="background:var(--hover)">{{ tok.t }}</span>
+              <sc-if value="{{ tok.selected }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute;left:0;top:calc(100% + 6px);z-index:30;width:260px;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px;font-family:'Nunito',sans-serif;line-height:1.3;letter-spacing:0;animation:hs-pop .18s ease-out">
+                  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+                    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-family:'Noto Sans SC',sans-serif;font-size:30px;font-weight:500;color:var(--ink)">{{ tok.t }}</span><span style="font-size:15px;font-weight:700;color:var(--brand-deep)">{{ tok.py }}</span></div>
+                    <span style="padding:4px 9px;border-radius:999px;font-size:12px;font-weight:900;white-space:nowrap;color: {{ tok.chipFg }};background: {{ tok.chipBg }};border: {{ tok.chipBorder }}">{{ tok.levelLabel }}</span>
+                  </div>
+                  <div style="font-size:14px;font-weight:700;color:var(--ink)">{{ tok.en }}</div>
+                  <div style="font-size:12px;font-weight:700;color:var(--ink2)">{{ tok.note }}</div>
+                  <button onClick="{{ tok.toggleFlag }}" style="padding:10px;border-radius:12px;cursor:pointer;font-size:14px;font-weight:900;border:2px solid var(--brand);background: {{ tok.flagBg }};color: {{ tok.flagFg }}">{{ tok.flagLabel }}</button>
+                </div>
+              </sc-if>
+            </span>
+          </sc-for>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding-top:16px;font-size:13px;font-weight:700;color:var(--ink2)">
+          <span>Tap any word for pinyin and meaning</span>
+          <span style="display:inline-flex;align-items:center;gap:6px"><span style="display:inline-block;width:22px;border-bottom:3px dashed var(--oov)"></span>dashed = not in HSK vocabulary</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between"><span style="font-size:13px;font-weight:800;color:var(--ink2);letter-spacing:.08em;text-transform:uppercase">Flagged words</span><span style="font-size:13px;font-weight:800;color:var(--brand-deep)">{{ flaggedCount }}</span></div>
+        <div style="background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:6px;display:flex;flex-direction:column">
+          <sc-for list="{{ flaggedList }}" as="f" hint-placeholder-count="5">
+            <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px" style-hover="background:var(--hover)">
+              <span style="width:6px;height:28px;border-radius:999px;background: {{ f.color }}"></span>
+              <div style="display:flex;flex-direction:column;flex:1;min-width:0"><span style="font-family:'Noto Sans SC',sans-serif;font-size:18px;font-weight:500">{{ f.t }}</span><span style="font-size:12px;font-weight:700;color:var(--ink2)">{{ f.py }} · {{ f.en }}</span></div>
+              <span style="font-size:11px;font-weight:900;color: {{ f.color }}">HSK {{ f.l }}</span>
+              <button onClick="{{ f.remove }}" title="Remove" style="width:26px;height:26px;border-radius:8px;border:0;background:transparent;color:var(--ink2);cursor:pointer;font-weight:900" style-hover="background:var(--line)">×</button>
+            </div>
+          </sc-for>
+          <sc-if value="{{ noFlagged }}" hint-placeholder-val="{{ false }}"><div style="padding:20px;text-align:center;font-size:13px;font-weight:700;color:var(--ink2)">No words flagged yet. Tap a word, then "Save as flashcard".</div></sc-if>
+        </div>
+        <button onClick="{{ startReview }}" style="padding:14px;border-radius:14px;border:0;background:var(--brand);color:var(--brand-ink);font-size:15px;font-weight:900;cursor:pointer" style-hover="filter:brightness(1.06)">Start review session</button>
+        <div style="font-size:12px;font-weight:700;color:var(--ink2);text-align:center;line-height:1.5">Words HSK 5+ were auto-flagged because they're above your level. Add or remove any.</div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ===== REVIEW ===== -->
+  <sc-if value="{{ isReview }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+      <div style="display:flex;flex-direction:column;gap:4px"><h1 style="margin:0;font-size:28px;font-weight:900;letter-spacing:-.02em">Review session</h1><span style="font-size:14px;font-weight:700;color:var(--ink2)">Space to flip · ← again · → got it</span></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;background:color-mix(in oklab,var(--h3) 20%,var(--panel));color:#9A7400;font-weight:900;font-size:14px">★ +{{ sessionXp }} XP</div>
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;background:var(--panel);border:1px solid var(--line);font-weight:900;font-size:14px"><span style="color:var(--ink2);font-weight:800">Card</span>{{ reviewPos }}<span style="color:var(--ink2)">/ {{ deckSize }}</span></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:5px">
+      <sc-for list="{{ reviewDots }}" as="d" hint-placeholder-count="8"><div style="flex:1;height:8px;border-radius:999px;background: {{ d.color }}"></div></sc-for>
+    </div>
+
+    <sc-if value="{{ reviewActive }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:24px;padding-top:12px">
+        <div onClick="{{ flipCard }}" style="width:100%;max-width:560px;min-height:340px;border-radius:28px;background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow);cursor:pointer;position:relative;overflow:hidden;display:flex;flex-direction:column;animation:hs-pop .3s ease-out;border-top:6px solid {{ card.color }}">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px 0">
+            <span style="padding:4px 10px;border-radius:999px;font-size:12px;font-weight:900;color:#fff;background: {{ card.color }}">HSK {{ card.l }}</span>
+            <button onClick="{{ togglePinyin }}" style="padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink2);font-size:12px;font-weight:800;cursor:pointer" style-hover="background:var(--hover)">{{ pinyinToggleLabel }}</button>
+          </div>
+          <sc-if value="{{ notFlipped }}" hint-placeholder-val="{{ true }}">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px">
+              <div style="font-family:'Noto Sans SC',sans-serif;font-size:84px;font-weight:500;line-height:1.1;letter-spacing:.06em">{{ card.t }}</div>
+              <sc-if value="{{ showPinyinFront }}" hint-placeholder-val="{{ false }}"><div style="font-size:22px;font-weight:700;color:var(--brand-deep)">{{ card.py }}</div></sc-if>
+              <div style="font-size:13px;font-weight:700;color:var(--ink2);margin-top:8px">Tap to reveal</div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ flipped }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px 32px 28px;text-align:center;animation:hs-pop .25s ease-out">
+              <div style="display:flex;align-items:baseline;gap:14px"><span style="font-family:'Noto Sans SC',sans-serif;font-size:44px;font-weight:500">{{ card.t }}</span><span style="font-size:24px;font-weight:700;color:var(--brand-deep)">{{ card.py }}</span></div>
+              <div style="font-size:20px;font-weight:800">{{ card.en }}</div>
+              <div style="margin-top:10px;padding:14px 18px;border-radius:16px;background:var(--bg);font-family:'Noto Sans SC',sans-serif;font-size:18px;line-height:1.8;color:var(--ink);text-wrap:pretty">{{ card.exBefore }}<span style="font-weight:700;border-bottom:3px solid {{ card.color }}">{{ card.t }}</span>{{ card.exAfter }}</div>
+              <div style="font-size:12px;font-weight:700;color:var(--ink2)">from “科技新闻 · AI in the workplace”</div>
+            </div>
+          </sc-if>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;width:100%;max-width:560px">
+          <button onClick="{{ answerAgain }}" style="padding:18px;border-radius:16px;border:2px solid var(--h5);background:var(--panel);color:var(--h5);font-size:17px;font-weight:900;cursor:pointer" style-hover="background:color-mix(in oklab,var(--h5) 12%,var(--panel))">← Review again</button>
+          <button onClick="{{ answerGot }}" style="padding:18px;border-radius:16px;border:2px solid var(--h1);background:var(--h1);color:#fff;font-size:17px;font-weight:900;cursor:pointer" style-hover="filter:brightness(1.06)">Got it →</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ reviewDone }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:20px;padding:24px 0;animation:hs-pop .4s ease-out">
+        <div style="width:120px;height:120px;border-radius:36px;background:var(--brand);color:var(--brand-ink);display:grid;place-items:center;font-size:56px;font-weight:900;box-shadow:0 12px 30px rgba(14,154,154,.35)">✓</div>
+        <h2 style="margin:0;font-size:36px;font-weight:900;letter-spacing:-.02em">Session complete!</h2>
+        <p style="margin:0;font-size:17px;font-weight:600;color:var(--ink2)">You earned <strong style="color:#9A7400">+{{ sessionXp }} XP</strong> and kept your <strong style="color:var(--flame)">{{ streakNext }}-day streak</strong> alive.</p>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center">
+          <div style="display:flex;flex-direction:column;gap:2px;padding:16px 24px;border-radius:18px;background:var(--panel);border:1px solid var(--line);min-width:130px"><span style="font-size:30px;font-weight:900;color:var(--h1)">{{ gotCount }}</span><span style="font-size:13px;font-weight:700;color:var(--ink2)">got it</span></div>
+          <div style="display:flex;flex-direction:column;gap:2px;padding:16px 24px;border-radius:18px;background:var(--panel);border:1px solid var(--line);min-width:130px"><span style="font-size:30px;font-weight:900;color:var(--h5)">{{ againCount }}</span><span style="font-size:13px;font-weight:700;color:var(--ink2)">to review again</span></div>
+          <div style="display:flex;flex-direction:column;gap:2px;padding:16px 24px;border-radius:18px;background:var(--panel);border:1px solid var(--line);min-width:130px"><span style="font-size:30px;font-weight:900;color:var(--brand-deep)">{{ levelGain }}</span><span style="font-size:13px;font-weight:700;color:var(--ink2)">toward HSK {{ nextLevel }}</span></div>
+        </div>
+        <div style="padding:14px 20px;border-radius:16px;background:var(--brand-soft);color:var(--brand-deep);font-weight:800;font-size:15px">Come back tomorrow — {{ againCount }} cards will be due for review.</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
+          <button onClick="{{ goProgress }}" style="padding:14px 28px;border-radius:14px;border:0;background:var(--brand);color:var(--brand-ink);font-size:16px;font-weight:900;cursor:pointer" style-hover="filter:brightness(1.06)">See my progress</button>
+          <button onClick="{{ startReview }}" style="padding:14px 28px;border-radius:14px;border:2px solid var(--line);background:var(--panel);color:var(--ink);font-size:16px;font-weight:900;cursor:pointer" style-hover="background:var(--hover)">Review again</button>
+        </div>
+      </div>
+      {{ confetti }}
+    </sc-if>
+  </sc-if>
+
+  <!-- ===== PROGRESS ===== -->
+  <sc-if value="{{ isProgress }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;gap:4px"><h1 style="margin:0;font-size:32px;font-weight:900;letter-spacing:-.02em">Your progress</h1><p style="margin:0;color:var(--ink2);font-size:15px;font-weight:600">Nice pace, Mei. Keep the streak going.</p></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:22px;display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:14px">
+          <span style="display:block;width:34px;height:44px;background:linear-gradient(var(--flame2),var(--flame));border-radius:50% 50% 50% 50% / 30% 30% 70% 70%;transform:rotate(180deg);animation:hs-flicker 1.4s ease-in-out infinite"></span>
+          <div style="display:flex;flex-direction:column"><span style="font-size:36px;font-weight:900;line-height:1;color:var(--flame)">{{ streak }}</span><span style="font-size:13px;font-weight:700;color:var(--ink2)">day streak</span></div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <sc-for list="{{ weekDots }}" as="d" hint-placeholder-count="7"><div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px"><div style="width:100%;aspect-ratio:1;border-radius:8px;background: {{ d.bg }};border: {{ d.border }}"></div><span style="font-size:10px;font-weight:800;color:var(--ink2)">{{ d.label }}</span></div></sc-for>
+        </div>
+      </div>
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:22px;display:flex;align-items:center;gap:18px">
+        <div style="position:relative;width:96px;height:96px;flex:none">
+          <svg width="96" height="96" viewBox="0 0 120 120" style="transform:rotate(-90deg)"><circle cx="60" cy="60" r="52" fill="none" stroke="var(--line)" stroke-width="14"></circle><circle cx="60" cy="60" r="52" fill="none" stroke="var(--brand)" stroke-width="14" stroke-linecap="round" stroke-dasharray="327" stroke-dashoffset="{{ levelOffset }}" style="animation:hs-fill 1s ease-out"></circle></svg>
+          <div style="position:absolute;inset:0;display:grid;place-items:center;font-size:15px;font-weight:900">{{ levelPctLabel }}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:8px"><span style="padding:3px 10px;border-radius:999px;font-weight:900;font-size:13px;color:#fff;background: {{ userLevelColor }}">HSK {{ userLevel }}</span><span style="font-size:13px;font-weight:800;color:var(--ink2)">→ HSK {{ nextLevel }}</span></div>
+          <span style="font-size:13px;font-weight:700;color:var(--ink2);line-height:1.4">Est. from 1,240 reviews. About 3 weeks at your pace.</span>
+        </div>
+      </div>
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:22px;display:flex;flex-direction:column;justify-content:space-between;gap:12px">
+        <div style="display:flex;flex-direction:column"><span style="font-size:36px;font-weight:900;line-height:1;color:var(--h4)">{{ dueCount }}</span><span style="font-size:13px;font-weight:700;color:var(--ink2)">words due for review</span></div>
+        <button onClick="{{ startReview }}" style="padding:12px;border-radius:12px;border:0;background:var(--brand);color:var(--brand-ink);font-size:14px;font-weight:900;cursor:pointer" style-hover="filter:brightness(1.06)">Review now</button>
+      </div>
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:22px;display:flex;flex-direction:column;justify-content:space-between;gap:12px">
+        <div style="display:flex;flex-direction:column"><span style="font-size:36px;font-weight:900;line-height:1">{{ totalWords }}</span><span style="font-size:13px;font-weight:700;color:var(--ink2)">words learned</span></div>
+        <div style="display:flex;gap:2px;height:8px;border-radius:999px;overflow:hidden">
+          <sc-for list="{{ learnedDist }}" as="seg" hint-placeholder-count="6"><div title="{{ seg.title }}" style="height:100%;background: {{ seg.color }};flex: {{ seg.n }}"></div></sc-for>
+        </div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px">
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:22px;display:flex;flex-direction:column;gap:18px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:16px;font-weight:900">Words learned per week</span><span style="font-size:13px;font-weight:700;color:var(--ink2)">Last 8 weeks</span></div>
+        <div style="display:flex;align-items:flex-end;gap:10px;height:160px">
+          <sc-for list="{{ weeks }}" as="w" hint-placeholder-count="8">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end">
+              <span style="font-size:12px;font-weight:900;color:var(--ink2)">{{ w.n }}</span>
+              <div style="width:100%;border-radius:10px 10px 6px 6px;background: {{ w.color }};height: {{ w.pct }}"></div>
+              <span style="font-size:11px;font-weight:800;color:var(--ink2)">{{ w.label }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:22px;display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:16px;font-weight:900">Milestones</span><span style="font-size:13px;font-weight:700;color:var(--ink2)">{{ badgeCount }} earned</span></div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+          <sc-for list="{{ badges }}" as="b" hint-placeholder-count="6">
+            <div title="{{ b.desc }}" style="display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;opacity: {{ b.opacity }}">
+              <div style="width:56px;height:56px;border-radius:18px;display:grid;place-items:center;font-size:20px;font-weight:900;color:#fff;background: {{ b.bg }};border: {{ b.border }}">{{ b.glyph }}</div>
+              <span style="font-size:11px;font-weight:800;color:var(--ink2);line-height:1.2">{{ b.label }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</main>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;welcome&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;welcome&quot;,&quot;placement&quot;,&quot;placementResult&quot;,&quot;goals&quot;,&quot;input&quot;,&quot;analysis&quot;,&quot;review&quot;,&quot;progress&quot;],&quot;section&quot;:&quot;Prototype&quot;},&quot;darkMode&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Theme&quot;},&quot;pinyinOnFront&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Flashcards&quot;}}">
+const HSK = ['var(--oov)','var(--h1)','var(--h2)','var(--h3)','var(--h4)','var(--h5)','var(--h6)'];
+const HSK_HEX = ['#9AAAA9','#2EAE69','#8DBB3B','#E3B321','#EE8A3A','#E1573D','#BE2E42'];
+const P = (t) => ({t, p:true});
+const TEXT = [
+ {t:'随着',py:'suízhe',en:'along with; as',l:4},{t:'人工智能',py:'réngōng zhìnéng',en:'artificial intelligence',l:0},{t:'技术',py:'jìshù',en:'technology',l:4},{t:'的',py:'de',en:'(possessive particle)',l:1},{t:'快速',py:'kuàisù',en:'fast; rapid',l:5},{t:'发展',py:'fāzhǎn',en:'develop; development',l:4},P('，'),
+ {t:'越来越',py:'yuèláiyuè',en:'more and more',l:3},{t:'多',py:'duō',en:'many; much',l:1},{t:'的',py:'de',en:'(possessive particle)',l:1},{t:'公司',py:'gōngsī',en:'company',l:2},{t:'开始',py:'kāishǐ',en:'begin; start',l:2},{t:'使用',py:'shǐyòng',en:'to use',l:4},{t:'机器学习',py:'jīqì xuéxí',en:'machine learning',l:0},{t:'来',py:'lái',en:'(in order) to',l:1},{t:'提高',py:'tígāo',en:'to raise; improve',l:3},{t:'工作',py:'gōngzuò',en:'work',l:1},{t:'效率',py:'xiàolǜ',en:'efficiency',l:5},P('。'),
+ {t:'专家',py:'zhuānjiā',en:'expert',l:5},{t:'认为',py:'rènwéi',en:'to think; believe',l:3},P('，'),{t:'这种',py:'zhè zhǒng',en:'this kind of',l:3},{t:'趋势',py:'qūshì',en:'trend',l:6},{t:'将会',py:'jiānghuì',en:'will (future)',l:4},{t:'继续',py:'jìxù',en:'to continue',l:4},{t:'下去',py:'xiàqù',en:'to go on',l:3},P('，'),{t:'但',py:'dàn',en:'but',l:2},{t:'同时',py:'tóngshí',en:'at the same time',l:3},{t:'也',py:'yě',en:'also',l:2},{t:'带来',py:'dàilái',en:'to bring (about)',l:4},{t:'了',py:'le',en:'(aspect particle)',l:1},{t:'新',py:'xīn',en:'new',l:2},{t:'的',py:'de',en:'(possessive particle)',l:1},{t:'挑战',py:'tiǎozhàn',en:'challenge',l:5},P('。')
+];
+const SAMPLE = TEXT.map(x=>x.t).join('');
+const S1 = '随着人工智能技术的快速发展，越来越多的公司开始使用机器学习来提高工作效率。';
+const S2 = '专家认为，这种趋势将会继续下去，但同时也带来了新的挑战。';
+const EXTRA = [
+ {t:'环境',py:'huánjìng',en:'environment',l:3,ex:'保护环境是每个人的责任。'},
+ {t:'经验',py:'jīngyàn',en:'experience',l:4,ex:'他在这个行业有十年的经验。'},
+ {t:'影响',py:'yǐngxiǎng',en:'to influence; effect',l:3,ex:'天气对我们的心情有很大的影响。'}
+];
+const PLACEMENT = [
+ {t:'你好',l:1},{t:'朋友',l:1},{t:'因为',l:2},{t:'环境',l:3},{t:'经济',l:4},{t:'观点',l:5},{t:'谨慎',l:6}
+];
+const GOALS = [{big:'5',small:'new words / day'},{big:'10',small:'new words / day'},{big:'10 min',small:'per day'},{big:'20 min',small:'per day'}];
+const MOTIVES = ['Reading news','HSK exam prep','Textbooks','Chatting with friends','Novels & stories'];
+const TABS = [{id:'input',label:'Analyze',match:['input','analysis']},{id:'review',label:'Review',match:['review']},{id:'progress',label:'Progress',match:['progress']}];
+
+class Component extends DCLogic {
+  constructor(p){
+    super(p);
+    this.state = {
+      screen: p.startScreen ?? 'welcome', dark: !!p.darkMode, pinyinFront: !!p.pinyinOnFront,
+      pIdx: 0, pAnswers: [], goal: 0, motive: 0,
+      inputText: '', selected: null,
+      flagged: {'快速':1,'效率':1,'专家':1,'趋势':1,'挑战':1},
+      deck: [], rIdx: 0, flipped: false, results: [], xp: 0
+    };
+    this.confettiEl = this.makeConfetti();
+    this.onKey = (e) => {
+      if (this.state.screen !== 'review' || this.state.rIdx >= this.state.deck.length) return;
+      if (e.key === ' ') { e.preventDefault(); this.setState(s=>({flipped:!s.flipped})); }
+      if (e.key === 'ArrowRight') this.answer(true);
+      if (e.key === 'ArrowLeft') this.answer(false);
+    };
+  }
+  componentDidMount(){ this.syncDark(); window.addEventListener('keydown', this.onKey); }
+  componentWillUnmount(){ window.removeEventListener('keydown', this.onKey); }
+  componentDidUpdate(prev){
+    if (prev.darkMode !== this.props.darkMode) this.setState({dark: !!this.props.darkMode});
+    if (prev.startScreen !== this.props.startScreen && this.props.startScreen) this.setState({screen: this.props.startScreen});
+    if (prev.pinyinOnFront !== this.props.pinyinOnFront) this.setState({pinyinFront: !!this.props.pinyinOnFront});
+    this.syncDark();
+  }
+  syncDark(){ document.body.classList.toggle('dark', this.state.dark); }
+  makeConfetti(){
+    const cols = HSK_HEX.slice(1).concat(['#0E9A9A','#2BC7C2']);
+    const pieces = Array.from({length: 70}, (_, i) => React.createElement('div', {key:i, style:{
+      position:'fixed', left: (Math.random()*100)+'%', top:0, width: 8+Math.random()*8, height: 10+Math.random()*10,
+      background: cols[i % cols.length], borderRadius: Math.random()>.5 ? '50%' : 3, pointerEvents:'none', zIndex: 50,
+      animation: `hs-fall ${2.4+Math.random()*1.8}s cubic-bezier(.2,.6,.4,1) ${Math.random()*1.2}s forwards`
+    }}));
+    return React.createElement('div', {style:{position:'fixed',inset:0,pointerEvents:'none',overflow:'hidden'}}, pieces);
+  }
+  go(screen){ this.setState({screen, selected:null}); }
+  buildDeck(){
+    const seen = {};
+    const fromText = TEXT.filter(x => !x.p && this.state.flagged[x.t] && !seen[x.t] && (seen[x.t]=1))
+      .map(x => ({...x, ex: S1.includes(x.t) ? S1 : S2}));
+    return fromText.concat(EXTRA).slice(0, 8);
+  }
+  answer(got){
+    this.setState(s => ({results:[...s.results, got], rIdx:s.rIdx+1, flipped:false, xp: s.xp + (got ? 10 : 3)}));
+  }
+  renderVals(){
+    const s = this.state;
+    const known = s.pAnswers.filter(Boolean).length;
+    const estimateLevel = Math.max(1, Math.min(6, s.pAnswers.length ? Math.round(known * 6 / 7) : 3)) || 1;
+    const userLevel = 3, nextLevel = 4, levelPctNum = 0.68;
+    const isApp = ['input','analysis','review','progress'].includes(s.screen);
+    const isOnboarding = !isApp;
+    const words = TEXT.filter(x => !x.p);
+    const counts = [0,0,0,0,0,0,0]; words.forEach(w => counts[w.l]++);
+    const legendLabels = ['Unknown','HSK 1','HSK 2','HSK 3','HSK 4','HSK 5','HSK 6'];
+    const order = [1,2,3,4,5,6,0];
+    const distribution = order.map(l => ({color: HSK[l], n: counts[l], title: legendLabels[l]+': '+counts[l]}));
+    const legend = order.map(l => ({color: l ? HSK[l] : 'transparent', border: l ? '0' : '2px dashed var(--oov)', label: legendLabels[l], n: counts[l]}));
+    const flaggedSeen = {};
+    const flaggedList = words.filter(w => s.flagged[w.t] && !flaggedSeen[w.t] && (flaggedSeen[w.t]=1)).map(w => ({
+      ...w, color: HSK[w.l], remove: () => this.setState(st => { const f = {...st.flagged}; delete f[w.t]; return {flagged:f}; })
+    }));
+    const tokens = TEXT.map((tok, i) => {
+      if (tok.p) return {t: tok.t, cursor:'default', underline:'0', bg:'transparent', fg:'var(--ink)', selected:false, select:null};
+      const sel = s.selected === i, isFlag = !!s.flagged[tok.t];
+      const oov = tok.l === 0, col = HSK[tok.l];
+      return {
+        t: tok.t, py: tok.py, en: tok.en, cursor:'pointer',
+        underline: oov ? '3px dashed var(--oov)' : `3px solid ${col}`,
+        bg: sel ? 'var(--hover)' : (isFlag ? `color-mix(in oklab, ${col} 16%, transparent)` : 'transparent'),
+        fg: 'var(--ink)', selected: sel,
+        select: (e) => { e.stopPropagation(); this.setState({selected: sel ? null : i}); },
+        levelLabel: oov ? 'Not in HSK' : 'HSK '+tok.l,
+        chipFg: oov ? 'var(--ink2)' : '#fff', chipBg: oov ? 'transparent' : col, chipBorder: oov ? '2px dashed var(--oov)' : '0',
+        note: oov ? 'Outside the classifier vocabulary — likely a proper noun or technical term.' : (tok.l > userLevel ? `${tok.l - userLevel} level${tok.l-userLevel>1?'s':''} above you` : 'At or below your level'),
+        flagLabel: isFlag ? '✓ Saved as flashcard' : 'Save as flashcard',
+        flagBg: isFlag ? 'var(--brand)' : 'transparent', flagFg: isFlag ? 'var(--brand-ink)' : 'var(--brand-deep)',
+        toggleFlag: (e) => { e.stopPropagation(); this.setState(st => { const f = {...st.flagged}; if (f[tok.t]) delete f[tok.t]; else f[tok.t] = 1; return {flagged:f}; }); }
+      };
+    });
+    const card = s.deck[s.rIdx] || s.deck[0] || EXTRA[0];
+    const exIdx = card.ex.indexOf(card.t);
+    const gotCount = s.results.filter(Boolean).length, againCount = s.results.length - gotCount;
+    const reviewActive = s.deck.length > 0 && s.rIdx < s.deck.length;
+    const weeks = [14,22,18,31,27,35,29,42].map((n, i) => ({n, pct: Math.round(n/42*100)+'%', label: i===7 ? 'Now' : 'W'+(i+1), color: i===7 ? 'var(--brand)' : 'var(--brand-soft)'}));
+    const badges = [
+      {glyph:'7', label:'7-day streak', bg:'var(--flame)', earned:true, desc:'Reviewed 7 days in a row'},
+      {glyph:'100', label:'100 words', bg:'var(--h2)', earned:true, desc:'Learned 100 words'},
+      {glyph:'HSK3', label:'Reached HSK 3', bg:'var(--h3)', earned:true, desc:'Level estimate hit HSK 3'},
+      {glyph:'30', label:'30-day streak', bg:'var(--flame)', earned:false, desc:'Review 30 days in a row'},
+      {glyph:'500', label:'500 words', bg:'var(--h4)', earned:false, desc:'Learn 500 words'},
+      {glyph:'HSK4', label:'Reach HSK 4', bg:'var(--h4)', earned:false, desc:'Level estimate hits HSK 4'}
+    ].map(b => ({...b, glyph: b.glyph, opacity: b.earned ? 1 : .45, bg: b.earned ? b.bg : 'var(--line)', border: b.earned ? '0' : '2px dashed var(--oov)'}));
+    const wd = ['M','T','W','T','F','S','S'];
+    const weekDots = wd.map((label, i) => ({label, bg: i < 4 ? 'var(--flame)' : (i===4 ? 'transparent' : 'var(--bg)'), border: i===4 ? '2px dashed var(--flame)' : (i<4 ? '0' : '1px solid var(--line)')}));
+    const stepMap = {placement:'Step 1 of 3', placementResult:'Step 1 of 3', goals:'Step 2 of 3'};
+    const pIdx = Math.min(s.pIdx, PLACEMENT.length - 1);
+    const pAns = (yes) => {
+      const answers = [...s.pAnswers, yes];
+      if (s.pIdx + 1 >= PLACEMENT.length) this.setState({pAnswers: answers, screen:'placementResult'});
+      else this.setState({pAnswers: answers, pIdx: s.pIdx + 1});
+    };
+    return {
+      isOnboarding, isApp, isWelcome: s.screen==='welcome', isPlacement: s.screen==='placement', isPlacementResult: s.screen==='placementResult',
+      isGoals: s.screen==='goals', isInput: s.screen==='input', isAnalysis: s.screen==='analysis', isReview: s.screen==='review', isProgress: s.screen==='progress',
+      stepLabel: stepMap[s.screen] || '', darkGlyph: s.dark ? '☀' : '☾',
+      toggleDark: () => this.setState(st => ({dark: !st.dark})),
+      hskLegend: [1,2,3,4,5,6].map(l => ({color: HSK[l], label: 'HSK '+l})),
+      goPlacement: () => this.setState({screen:'placement', pIdx:0, pAnswers:[]}),
+      skipToApp: (e) => { e.preventDefault(); this.go('input'); },
+      goGoals: (e) => { e && e.preventDefault && e.preventDefault(); this.go('goals'); },
+      goInput: () => this.go('input'), goProgress: () => this.go('progress'),
+      placementDots: PLACEMENT.map((w, i) => ({color: i < s.pAnswers.length ? (s.pAnswers[i] ? HSK[w.l] : 'var(--line)') : (i === s.pIdx ? 'var(--brand)' : 'var(--line)')})),
+      placementWord: PLACEMENT[pIdx].t, placementCounter: `Word ${pIdx+1} of ${PLACEMENT.length}`,
+      placementYes: () => pAns(true), placementNo: () => pAns(false),
+      estimateLevel, knownCount: known, estimateColor: HSK[estimateLevel], estimateOffset: 327 * (1 - estimateLevel/6),
+      goalOptions: GOALS.map((g, i) => ({...g, pick: () => this.setState({goal:i}), border: s.goal===i ? 'var(--brand)' : 'var(--line)', bg: s.goal===i ? 'var(--brand-soft)' : 'var(--panel)', numColor: s.goal===i ? 'var(--brand-deep)' : 'var(--ink)'})),
+      motivationOptions: MOTIVES.map((label, i) => ({label, pick: () => this.setState({motive:i}), border: s.motive===i ? 'var(--brand)' : 'var(--line)', bg: s.motive===i ? 'var(--brand)' : 'var(--panel)', fg: s.motive===i ? 'var(--brand-ink)' : 'var(--ink)'})),
+      tabs: TABS.map(t => ({label: t.label, go: () => t.id==='review' ? this.startReview() : this.go(t.id), bg: t.match.includes(s.screen) ? 'var(--brand-soft)' : 'transparent', fg: t.match.includes(s.screen) ? 'var(--brand-deep)' : 'var(--ink2)'})),
+      streak: 12, streakNext: 13, userLevel, nextLevel, userLevelColor: HSK[userLevel], levelPct: Math.round(levelPctNum*100)+'%', levelPctLabel: Math.round(levelPctNum*100)+'%', levelOffset: 327*(1-levelPctNum),
+      inputText: s.inputText, setInput: (e) => this.setState({inputText: e.target.value}), charCount: s.inputText.length,
+      loadSample: () => this.setState({inputText: SAMPLE}),
+      analyze: () => this.setState({screen:'analysis', selected:null, inputText: s.inputText || SAMPLE}),
+      recentTexts: [
+        {title:'科技新闻 · AI at work', when:'Today', preview: SAMPLE, meta:'Mostly HSK 3–4 · 5 flagged', dist: order.map(l => ({color: HSK[l], n: counts[l]}))},
+        {title:'Chat with 小王', when:'Yesterday', preview:'你周末有空吗？我们去爬山吧！', meta:'Mostly HSK 1–2 · 1 flagged', dist:[9,6,3,1,0,0,1].map((n,i)=>({color: HSK[order[i]], n}))},
+        {title:'HSK 4 Standard Course · L12', when:'3 days ago', preview:'不管做什么事情，态度都是最重要的。', meta:'Mostly HSK 3–4 · 4 flagged', dist:[5,4,8,7,2,0,0].map((n,i)=>({color: HSK[order[i]], n}))}
+      ],
+      wordCount: words.length, aboveCount: words.filter(w => w.l > userLevel).length, flaggedCount: flaggedList.length, noFlagged: flaggedList.length===0,
+      distribution, legend, tokens, flaggedList,
+      startReview: () => this.setState({screen:'review', deck: this.buildDeck(), rIdx:0, flipped:false, results:[], xp:0, selected:null}),
+      reviewActive, reviewDone: s.deck.length > 0 && !reviewActive, notFlipped: !s.flipped, flipped: s.flipped,
+      reviewPos: Math.min(s.rIdx+1, s.deck.length), deckSize: s.deck.length, sessionXp: s.xp,
+      reviewDots: s.deck.map((_, i) => ({color: i < s.results.length ? (s.results[i] ? 'var(--h1)' : 'var(--h5)') : (i===s.rIdx ? 'var(--brand)' : 'var(--line)')})),
+      card: {...card, color: HSK[card.l], exBefore: card.ex.slice(0, exIdx), exAfter: card.ex.slice(exIdx + card.t.length)},
+      flipCard: () => this.setState(st => ({flipped: !st.flipped})),
+      togglePinyin: (e) => { e.stopPropagation(); this.setState(st => ({pinyinFront: !st.pinyinFront})); },
+      showPinyinFront: s.pinyinFront, pinyinToggleLabel: s.pinyinFront ? 'Hide pinyin' : 'Show pinyin',
+      answerAgain: () => this.answer(false), answerGot: () => this.answer(true),
+      gotCount, againCount, levelGain: '+' + (gotCount * 2) + '%',
+      confetti: this.confettiEl,
+      dueCount: 14, totalWords: 286, badgeCount: 3, weeks, badges, weekDots,
+      learnedDist: [1,2,3,4,5,6].map(l => ({color: HSK[l], n: [0,110,82,58,28,6,2][l], title: 'HSK '+l}))
+    };
+  }
+}
+</script>
+</body>
+</html>
