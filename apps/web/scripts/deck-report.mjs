@@ -1,7 +1,10 @@
-// Local-only: prints how an Anki export parses. Usage:
-//   pnpm tsx scripts/deck-report.mjs "../../Chinese Level 2.txt"
+// Local-only: prints how an Anki export parses and how combined fronts are
+// decided against the official list. Usage:
+//   node scripts/build-hsk30-index.mjs   (once)
+//   npx tsx scripts/deck-report.mjs "../../Chinese Level 2.txt"
 import { readFileSync } from "node:fs";
 import { parseAnkiExport, summarize } from "../lib/anki-import.ts";
+import { planSplit } from "../lib/split-front.ts";
 
 const path = process.argv[2];
 if (!path) {
@@ -10,15 +13,16 @@ if (!path) {
 }
 
 const deck = parseAnkiExport(readFileSync(path, "utf8"));
+const index = JSON.parse(readFileSync(new URL("../public/hsk30-index.json", import.meta.url), "utf8"));
 console.log("headers:", deck.headers);
 console.log(summarize(deck));
 
-const show = (label, pred, max = 12) => {
-  const hits = deck.notes.filter(pred);
-  console.log(`\n${label} (${hits.length})`);
-  for (const n of hits.slice(0, max)) console.log(`  #${n.row} ${JSON.stringify(n.frontParts)}`);
-};
-show("pairs", (n) => n.splitKind === "pair", 40);
-show("variants", (n) => n.splitKind === "variant", 40);
-show("grammar-looking", (n) => n.isGrammar, 40);
-show("odd fronts (long or non-Han)", (n) => n.front.length > 12 || !/\p{Script=Han}/u.test(n.front), 40);
+console.log("\ncombined fronts:");
+for (const n of deck.notes) {
+  if (n.frontParts.length < 2) continue;
+  const plan = planSplit(n.front, index);
+  console.log(`  #${n.row} ${JSON.stringify(n.frontParts)} -> ${plan.action} [${plan.status}] ${plan.reason}`);
+}
+
+const grammar = deck.notes.filter((n) => n.isGrammar);
+console.log(`\ngrammar-looking (${grammar.length}):`, grammar.map((n) => n.front).join("  "));

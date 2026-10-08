@@ -6,3 +6,5 @@ docs/HanziSave-Project-Plan-v2.md
 
 Chinese Level 2.txt
 docs/skills/
+ml/data/lexicon/hsk30.csv
+apps/web/public/hsk30-index.json

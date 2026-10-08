@@ -6,6 +6,7 @@ import { analyze } from "../lib/analyze.ts";
 import { supportedMax } from "../lib/level.ts";
 import { hashString } from "../lib/hash.ts";
 import { parseAnkiExport } from "../lib/anki-import.ts";
+import { planSplit } from "../lib/split-front.ts";
 
 // Longest-match re-merge: ICU splits 电脑 into 电+脑, lexicon has 电脑 (HSK1).
 {
@@ -75,6 +76,23 @@ import { parseAnkiExport } from "../lib/anki-import.ts";
     deck.notes.map((n) => n.format),
     ["old", "old", "old", "old", "old", "intermediate", "current"],
   );
+}
+
+// planSplit(): the official list decides; heuristics are only proposals.
+{
+  const index = {
+    entries: { A: ["1", "N"], B: ["2", "V"], C: ["2", "V"], D: ["4", "V"] },
+    forms: { "爸爸": ["A"], "爸": ["A"], "选": ["B"], "选择": ["D"], "租": ["B"], "出租": ["C"] },
+  };
+  const p = (f) => planSplit(f, index);
+  assert.deepEqual([p("爸爸 / 爸").action, p("爸爸 / 爸").status], ["keep", "official"]);
+  assert.deepEqual([p("选 / 选择").action, p("选 / 选择").status], ["split", "official"]); // different rows
+  assert.deepEqual([p("租 / 出租").action, p("租 / 出租").status], ["split", "official"]); // same level+POS, still two ids
+  assert.deepEqual([p("淘宝 / 淘宝网").action, p("淘宝 / 淘宝网").status], ["keep", "proposal"]);
+  assert.deepEqual([p("京东网 / 天猫网").action, p("京东网 / 天猫网").status], ["split", "proposal"]);
+  assert.equal(p("爸 / 淘宝").status, "proposal"); // only one part is listed
+  assert.deepEqual([p("之 / ……分之……").action, p("之 / ……分之……").status], ["split", "proposal"]); // word + pattern
+  assert.equal(p("打车").action, "none");
 }
 
 console.log("smoke-test: all checks passed");
