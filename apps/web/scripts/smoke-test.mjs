@@ -9,6 +9,7 @@ import { parseAnkiExport } from "../lib/anki-import.ts";
 import { planSplit } from "../lib/split-front.ts";
 import { buildDeckPlan } from "../lib/deck-plan.ts";
 import { buildCardPrompt, cleanCardOutput } from "../lib/card-prompt.ts";
+import { hasAccess } from "../lib/access.ts";
 
 // Longest-match re-merge: ICU splits 电脑 into 电+脑, lexicon has 电脑 (HSK1).
 {
@@ -126,6 +127,15 @@ import { buildCardPrompt, cleanCardOutput } from "../lib/card-prompt.ts";
   const NL = String.fromCharCode(10);
   assert.equal(cleanCardOutput("```" + NL + "Pinyin: dǎ chē" + NL + "```"), "Pinyin: dǎ chē");
   assert.equal(cleanCardOutput("  Pinyin: dǎ chē  "), "Pinyin: dǎ chē");
+}
+
+// hasAccess(): exact match on the x-access-code header; wrong or missing fails.
+{
+  const req = (code) => new Request("http://x/api/card", { headers: code ? { "x-access-code": code } : {} });
+  assert.equal(hasAccess(req("secret"), "secret"), true);
+  assert.equal(hasAccess(req("secreX"), "secret"), false);
+  assert.equal(hasAccess(req("secret!"), "secret"), false); // different length
+  assert.equal(hasAccess(req(), "secret"), false);
 }
 
 console.log("smoke-test: all checks passed");
