@@ -9,6 +9,9 @@ function toLlmError(error: unknown): LlmError {
     return new LlmError("OPENAI_API_KEY is missing or invalid", 401);
   }
   if (error instanceof OpenAI.RateLimitError) {
+    if (error.code === "insufficient_quota" || error.code === "credit_balance_exhausted") {
+      return new LlmError("OpenAI credits exhausted; add credits or switch provider", 402);
+    }
     return new LlmError("rate limited, try again shortly", 429);
   }
   if (error instanceof OpenAI.APIError) {
