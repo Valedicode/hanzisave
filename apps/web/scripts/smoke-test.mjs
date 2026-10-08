@@ -7,6 +7,7 @@ import { supportedMax } from "../lib/level.ts";
 import { hashString } from "../lib/hash.ts";
 import { parseAnkiExport } from "../lib/anki-import.ts";
 import { planSplit } from "../lib/split-front.ts";
+import { buildDeckPlan } from "../lib/deck-plan.ts";
 
 // Longest-match re-merge: ICU splits 电脑 into 电+脑, lexicon has 电脑 (HSK1).
 {
@@ -93,6 +94,26 @@ import { planSplit } from "../lib/split-front.ts";
   assert.equal(p("爸 / 淘宝").status, "proposal"); // only one part is listed
   assert.deepEqual([p("之 / ……分之……").action, p("之 / ……分之……").status], ["split", "proposal"]); // word + pattern
   assert.equal(p("打车").action, "none");
+}
+
+// buildDeckPlan(): official splits apply; proposals follow overrides.
+{
+  const index = { entries: { A: ["2", "N"], B: ["3", "N"] }, forms: { "优惠": ["A"], "会员": ["B"] } };
+  const TAB = String.fromCharCode(9);
+  const NL = String.fromCharCode(10);
+  const deck = parseAnkiExport(
+    [`优惠 / 会员${TAB}x${TAB}`, `淘宝 / 淘宝网${TAB}y${TAB}`, `又…又…${TAB}z${TAB}`].join(NL),
+  );
+  const plan = buildDeckPlan(deck, index);
+  assert.deepEqual(plan.units.map((u) => u.front), ["优惠", "会员", "淘宝 / 淘宝网", "又…又…"]);
+  assert.equal(plan.units[0].splitFrom, "优惠 / 会员");
+  assert.equal(plan.units[3].type, "grammar");
+  assert.deepEqual(plan.units[2].forms, ["淘宝", "淘宝网"]); // variants all count as known
+  const split = buildDeckPlan(deck, index, new Map([[2, "split"]]));
+  assert.deepEqual(split.units.map((u) => u.front).slice(2, 4), ["淘宝", "淘宝网"]);
+  const forced = buildDeckPlan(deck, index, new Map([[1, "keep"]])); // official split can't be overridden
+  assert.equal(forced.units[0].front, "优惠");
+  assert.equal(plan.known.length, 5);
 }
 
 console.log("smoke-test: all checks passed");

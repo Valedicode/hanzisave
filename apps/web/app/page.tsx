@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import styles from "./page.module.css";
 import { analyze, type AnalyzeResult, type AnalyzedWord } from "@/lib/analyze";
@@ -83,6 +84,9 @@ export default function Home() {
         <div className={styles.logo}>汉</div>
         <div className={styles.title}>HanziSave</div>
         {savedCount > 0 && <span className={styles.savedBadge}>{savedCount} cards saved</span>}
+        <Link href="/import" className={styles.savedBadge}>
+          Import Anki deck
+        </Link>
       </div>
 
       <div className={styles.legend}>
