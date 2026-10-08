@@ -5,6 +5,7 @@ import { segment } from "../lib/segment.ts";
 import { analyze } from "../lib/analyze.ts";
 import { supportedMax } from "../lib/level.ts";
 import { hashString } from "../lib/hash.ts";
+import { parseAnkiExport } from "../lib/anki-import.ts";
 
 // Longest-match re-merge: ICU splits 电脑 into 电+脑, lexicon has 电脑 (HSK1).
 {
@@ -45,6 +46,35 @@ import { hashString } from "../lib/hash.ts";
 {
   assert.equal(hashString("你好"), hashString("你好"));
   assert.notEqual(hashString("你好吗"), hashString("你好"));
+}
+
+// Anki import: quoted fields may hold tabs, newlines and "" escapes; multi-line
+// notes must stay one note (a naive line split would count them as several).
+{
+  const raw = [
+    "#separator:tab",
+    "#html:true",
+    "围巾\twéijīn<br>Scarf\t",
+    '具体流程\t"jùtǐ<br>Note: ""具体"" = details\nsecond line"\t',
+    "优惠 / 会员\tyōuhuì / huìyuán<br>Discount / Member\t",
+    "淘宝 / 淘宝网\ttáobǎo\t",
+    "又…又…\tyòu… yòu…\t",
+    "打车\tPinyin: dǎ chē<br>Jyutping: daa2 ce1\t",
+    "计划\tPinyin: jì huà<br>Patterns:<br>- 制定 + 计划\t",
+  ].join("\n");
+  const deck = parseAnkiExport(raw);
+  assert.equal(deck.headers.separator, "tab");
+  assert.equal(deck.notes.length, 7);
+  assert.equal(deck.notes[1].backText.includes('Note: "具体" = details\nsecond line'), true);
+  assert.equal(deck.notes[2].splitKind, "pair"); // different words -> split
+  assert.deepEqual(deck.notes[2].frontParts, ["优惠", "会员"]);
+  assert.equal(deck.notes[3].splitKind, "variant"); // 淘宝网 contains 淘宝 -> keep together
+  assert.equal(deck.notes[4].isGrammar, true);
+  assert.equal(deck.notes[0].isGrammar, false);
+  assert.deepEqual(
+    deck.notes.map((n) => n.format),
+    ["old", "old", "old", "old", "old", "intermediate", "current"],
+  );
 }
 
 console.log("smoke-test: all checks passed");
