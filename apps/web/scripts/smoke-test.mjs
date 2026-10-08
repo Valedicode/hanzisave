@@ -8,6 +8,7 @@ import { hashString } from "../lib/hash.ts";
 import { parseAnkiExport } from "../lib/anki-import.ts";
 import { planSplit } from "../lib/split-front.ts";
 import { buildDeckPlan } from "../lib/deck-plan.ts";
+import { buildCardPrompt, cleanCardOutput } from "../lib/card-prompt.ts";
 
 // Longest-match re-merge: ICU splits 电脑 into 电+脑, lexicon has 电脑 (HSK1).
 {
@@ -114,6 +115,17 @@ import { buildDeckPlan } from "../lib/deck-plan.ts";
   const forced = buildDeckPlan(deck, index, new Map([[1, "keep"]])); // official split can't be overridden
   assert.equal(forced.units[0].front, "优惠");
   assert.equal(plan.known.length, 5);
+}
+
+// buildCardPrompt()/cleanCardOutput(): the prompt carries only the fields given;
+// output loses a wrapping code fence but keeps inner content intact.
+{
+  assert.equal(buildCardPrompt({ item: "打车", type: "word" }), ["item: 打车", "type: word"].join(String.fromCharCode(10)));
+  const full = buildCardPrompt({ item: "下单", type: "word", context: "我下单了", hsk: "3", oldBack: "xiàdān" });
+  assert.ok(full.includes("context: 我下单了") && full.includes("hsk: 3") && full.endsWith("xiàdān"));
+  const NL = String.fromCharCode(10);
+  assert.equal(cleanCardOutput("```" + NL + "Pinyin: dǎ chē" + NL + "```"), "Pinyin: dǎ chē");
+  assert.equal(cleanCardOutput("  Pinyin: dǎ chē  "), "Pinyin: dǎ chē");
 }
 
 console.log("smoke-test: all checks passed");
