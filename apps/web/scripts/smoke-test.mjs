@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { segment } from "../lib/segment.ts";
 import { analyze } from "../lib/analyze.ts";
 import { supportedMax } from "../lib/level.ts";
+import { hashString } from "../lib/hash.ts";
 
 // Longest-match re-merge: ICU splits 电脑 into 电+脑, lexicon has 电脑 (HSK1).
 {
@@ -37,6 +38,13 @@ import { supportedMax } from "../lib/level.ts";
   assert.equal(result.sentences.length, 2);
   const flaggedWords = result.sentences.flatMap((s) => s.words.filter((w) => w.flagged));
   assert.ok(flaggedWords.length > 0, "expected at least one flagged (OOV or above-level) word");
+}
+
+// hashString(): the gloss cache key is (word, sentenceHash) — must be
+// deterministic and distinguish different sentences.
+{
+  assert.equal(hashString("你好"), hashString("你好"));
+  assert.notEqual(hashString("你好吗"), hashString("你好"));
 }
 
 console.log("smoke-test: all checks passed");

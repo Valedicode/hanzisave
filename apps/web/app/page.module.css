@@ -162,3 +162,80 @@
   border-bottom-style: dashed;
   color: var(--ink2);
 }
+
+.word.clickable {
+  cursor: pointer;
+}
+
+.word.clickable:hover {
+  background: var(--hover);
+  border-radius: 6px;
+}
+
+.word.selected {
+  background: var(--brand-soft);
+  border-radius: 6px;
+}
+
+.savedBadge {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--brand-deep);
+  background: var(--brand-soft);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.popoverHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.popoverWord {
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.popoverPinyin {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--brand-deep);
+}
+
+.exampleBox {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--bg);
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 16px;
+}
+
+.closeBtn {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--ink2);
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.flaggedList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.flaggedChip {
+  font-family: "Noto Sans SC", sans-serif;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 2px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 16px;
+  cursor: pointer;
+}

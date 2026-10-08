@@ -11,9 +11,12 @@
     "test": "tsx scripts/smoke-test.mjs"
   },
   "dependencies": {
+    "dexie": "^4.4.6",
     "next": "16.3.6",
+    "openai": "^7.23.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^20",
