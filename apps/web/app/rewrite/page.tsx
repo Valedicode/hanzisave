@@ -7,7 +7,11 @@ import { db, type DeckUnitRecord } from "@/lib/db";
 import { CardRequestError, requestCard } from "@/lib/card-client";
 import { getAccessCode, setAccessCode as storeAccessCode } from "@/lib/access-code";
 import { checkCardFormat } from "@/lib/card-format";
-import { estimateRemainingMs, formatEta } from "@/lib/eta";
+import { planComponentCards } from "@/lib/components";
+import { etaTracker, formatEta } from "@/lib/eta";
+import { lookup } from "@/lib/lexicon";
+import { loadKnownWords } from "@/lib/known-db";
+import type { Hsk30Index } from "@/lib/split-front";
 import { buildAnkiTsv, splitChanged } from "@/lib/rewrite";
 
 type Status = DeckUnitRecord["status"];
@@ -29,6 +33,8 @@ const BATCH = 25;
 const CONCURRENCY = 3;
 // Rough cost of one card with the default model; only used for the confirmation prompt.
 const COST_PER_CARD = 0.0013;
+// The one-time component backfill is offered until it has been run or skipped.
+const BACKFILL_KEY = "hanzisave.componentBackfill.v1";
 
 // A Back that already has every label of the card spec needs no regeneration.
 const alreadyInFormat = (u: DeckUnitRecord) => checkCardFormat(u.oldBack, u.type).ok;
@@ -50,6 +56,7 @@ export default function RewritePage() {
   const [editing, setEditing] = useState<{ id: number; text: string } | null>(null);
   const [exported, setExported] = useState("");
   const [notice, setNotice] = useState("");
+  const [backfillOpen, setBackfillOpen] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const stop = useRef(false);
 
@@ -57,6 +64,11 @@ export default function RewritePage() {
     db.deck_units.toArray().then((all) => {
       setUnits(all);
       setAccessCode(getAccessCode());
+      try {
+        setBackfillOpen(localStorage.getItem(BACKFILL_KEY) === null);
+      } catch {
+        // storage unavailable: the step is simply not offered
+      }
       setLoaded(true);
     });
   }, []);
@@ -111,7 +123,15 @@ export default function RewritePage() {
 
   const generateOne = async (u: DeckUnitRecord) => {
     try {
-      const raw = await requestCard({ item: u.front, type: u.type, oldBack: u.oldBack }, accessCode || undefined);
+      const raw = await requestCard(
+        {
+          item: u.front,
+          type: u.type,
+          oldBack: u.oldBack || undefined,
+          context: u.componentOf ? `part of the phrase ${u.componentOf}` : undefined,
+        },
+        accessCode || undefined,
+      );
       const { back, changed } = splitChanged(raw);
       await patch(u.id!, { status: "generated", newBack: back, changed, problems: undefined, stale: false });
     } catch (e) {
@@ -138,11 +158,56 @@ export default function RewritePage() {
     return queue.filter((u) => !skip.has(u.id));
   };
 
+  // Fixed expressions (注册银行卡) get a card for each part (注册, 银行卡). A part is only
+  // added if it isn't already a card, in the deck, known, or queued from a scan.
+  const addComponentCards = async (cards: DeckUnitRecord[]) => {
+    const phrases = cards.filter((c) => c.type === "word").map((c) => c.front);
+    if (phrases.length === 0) return;
+    const existing = new Set(await loadKnownWords());
+    for (const u of await db.deck_units.toArray()) {
+      existing.add(u.front);
+      for (const f of u.forms) existing.add(f);
+    }
+    // A part must be a real word: in the HSK lists or already in the learner's own deck.
+    const hsk30: Hsk30Index | null = await fetch("/hsk30-index.json")
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    const isWord = (w: string) => lookup(w) !== undefined || hsk30?.forms[w] !== undefined;
+    const plan = planComponentCards(phrases, existing, isWord);
+    if (plan.add.length > 0) {
+      const now = Date.now();
+      const records: DeckUnitRecord[] = plan.add.map((a) => ({
+        front: a.front,
+        forms: [a.front],
+        type: "word",
+        format: "old",
+        oldBack: "",
+        tags: "",
+        sourceRow: 0,
+        componentOf: a.componentOf,
+        status: "pending",
+        createdAt: now,
+      }));
+      const ids = await db.deck_units.bulkAdd(records, { allKeys: true });
+      setUnits((prev) => [...prev, ...records.map((r, i) => ({ ...r, id: ids[i] as number }))]);
+    }
+    const message =
+      plan.add.length > 0
+        ? `Added ${plan.add.length} component cards: ${plan.add.map((a) => a.front).join(", ")}. ` +
+          `${plan.skipped.length} parts already existed.`
+        : "";
+    const left =
+      plan.unverified.length > 0
+        ? ` Left out ${plan.unverified.length} parts that are not in the HSK lists or your deck: ${plan.unverified.join(", ")}.`
+        : "";
+    if (message || left) setNotice((prev) => (prev ? `${prev} ${message}${left}` : `${message}${left}`.trim()));
+  };
+
   const runQueue = async (queue: DeckUnitRecord[]) => {
     if (queue.length === 0) return;
     stop.current = false;
     setError("");
-    const startedAt = Date.now();
+    const eta = etaTracker(queue.length);
     setRunning({ done: 0, total: queue.length, etaMs: null });
     let next = 0;
     let done = 0;
@@ -151,11 +216,15 @@ export default function RewritePage() {
         while (next < queue.length && !stop.current) {
           await generateOne(queue[next++]);
           done++;
-          setRunning({ done, total: queue.length, etaMs: estimateRemainingMs(startedAt, Date.now(), done, queue.length) });
+          setRunning({ done, total: queue.length, etaMs: eta(done) });
         }
       }),
     );
     setRunning(null);
+
+    // Phrase cards that were just generated also get cards for their parts.
+    const fresh = await db.deck_units.where(":id").anyOf(queue.map((u) => u.id!)).toArray();
+    await addComponentCards(fresh.filter((u) => u.status === "generated" && !u.componentOf));
   };
 
   const pendingCards = () => units.filter((u) => u.status === "pending");
@@ -182,6 +251,19 @@ export default function RewritePage() {
     const forced = selectedToGenerate.filter((u) => u.status !== "pending");
     await runQueue([...(await sortOutFormatted(pending)), ...forced]);
     setSelected(new Set());
+  };
+
+  const finishBackfill = async (apply: boolean) => {
+    if (apply) {
+      const all = await db.deck_units.toArray();
+      await addComponentCards(all.filter((u) => !u.componentOf));
+    }
+    try {
+      localStorage.setItem(BACKFILL_KEY, "done");
+    } catch {
+      // not remembered
+    }
+    setBackfillOpen(false);
   };
 
   const setStatus = async (ids: number[], status: Status) => {
@@ -255,6 +337,23 @@ export default function RewritePage() {
         </Link>
         <div className={styles.title}>Rewrite deck</div>
       </div>
+
+      {backfillOpen && units.length > 0 && (
+        <div className={styles.panel}>
+          <div>
+            <b>One-time step.</b> Split your existing fixed expressions (like 注册银行卡) into their parts and add the
+            parts you don&apos;t have yet as new cards. From now on this happens automatically whenever cards are generated.
+          </div>
+          <div className={styles.row}>
+            <button className={styles.primary} onClick={() => finishBackfill(true)} disabled={!!running}>
+              Create component cards now
+            </button>
+            <button className={styles.secondary} onClick={() => finishBackfill(false)} disabled={!!running}>
+              Skip
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className={styles.panel}>
         <div className={styles.row}>
@@ -352,11 +451,9 @@ export default function RewritePage() {
           >
             Approve selected ({selectedToApprove.length})
           </button>
-          {approvableAll.length > 0 && (
-            <button className={styles.secondary} onClick={() => approveIds(approvableAll)}>
-              Approve all {approvableAll.length}
-            </button>
-          )}
+          <button className={styles.secondary} disabled={approvableAll.length === 0} onClick={() => approveIds(approvableAll)}>
+            Approve all {approvableAll.length}
+          </button>
           {toConfirmAll.length > 0 && (
             <>
               <button
@@ -397,6 +494,7 @@ export default function RewritePage() {
             <span className={styles.badge}>{u.type}</span>
             <span className={styles.badge}>was {u.format}</span>
             {u.splitFrom && <span className={styles.badge}>split from {u.splitFrom}</span>}
+            {u.componentOf && <span className={styles.badge}>part of {u.componentOf}</span>}
             {duplicateFronts.has(u.front) && <span className={styles.warn}>duplicate front</span>}
             {u.stale && <span className={styles.warn}>source changed in Anki after this rewrite</span>}
             {u.missing && <span className={styles.warn}>no longer in Anki</span>}
@@ -405,7 +503,7 @@ export default function RewritePage() {
           <div className={styles.cols}>
             <div>
               <div className={styles.label}>Old</div>
-              <pre className={styles.pre}>{u.oldBack}</pre>
+              <pre className={styles.pre}>{u.oldBack || "New card: there is no existing text."}</pre>
             </div>
             <div>
               <div className={styles.label}>New</div>

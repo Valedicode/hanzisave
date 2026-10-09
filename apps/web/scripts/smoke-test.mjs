@@ -16,7 +16,8 @@ import { generateValidCard } from "../lib/card-service.ts";
 import { buildAnkiTsv, splitChanged } from "../lib/rewrite.ts";
 import { mergeDeck } from "../lib/merge-deck.ts";
 import { scanText } from "../lib/scan.ts";
-import { estimateRemainingMs, formatEta } from "../lib/eta.ts";
+import { planComponentCards, splitComponents } from "../lib/components.ts";
+import { estimateRemainingMs, etaTracker, formatEta } from "../lib/eta.ts";
 import { parseBackup, serializeBackup } from "../lib/backup.ts";
 import { readApkg } from "../lib/apkg.ts";
 import { DatabaseSync } from "node:sqlite";
@@ -437,10 +438,50 @@ import { join } from "node:path";
   assert.equal(estimateRemainingMs(0, 5000, 0, 10), null, "no estimate before the first completion");
   assert.equal(estimateRemainingMs(0, 5000, 10, 10), null, "no estimate once finished");
   assert.equal(estimateRemainingMs(0, 10_000, 5, 15), 20_000); // 2 s per card, 10 cards left
+  assert.equal(etaTracker(10)(0), null, "the tracker gives no estimate before anything is done");
+  assert.equal(etaTracker(10)(10), null);
   assert.equal(formatEta(400), "~1 s left");
   assert.equal(formatEta(45_000), "~45 s left");
   assert.equal(formatEta(4 * 60_000), "~4 min left");
   assert.equal(formatEta(75 * 60_000), "~1 h 15 min left");
+}
+
+// splitComponents()/planComponentCards(): phrases split into parts; duplicates and lone characters never become cards.
+{
+  assert.deepEqual(splitComponents("注册银行卡", new Set()), ["注册", "银行卡"]);
+  // a phrase the learner already has must still be split
+  assert.deepEqual(splitComponents("注册银行卡", new Set(["注册银行卡"])), ["注册", "银行卡"]);
+  assert.deepEqual(splitComponents("银行", new Set()), [], "a single word is not a phrase");
+  assert.deepEqual(splitComponents("绑定银行卡", new Set()), ["绑定", "银行卡"], "characters the segmenter split are joined back");
+  assert.ok(splitComponents("快递员", new Set()).every((p) => p.length >= 2), "single characters are dropped");
+
+  const plan = planComponentCards(["注册银行卡", "注册账号"], new Set(["银行卡"]));
+  const fronts = plan.add.map((a) => a.front);
+  assert.ok(fronts.includes("注册"), "注册 is new");
+  assert.equal(fronts.filter((f) => f === "注册").length, 1, "added once even though two phrases contain it");
+  assert.ok(!fronts.includes("银行卡"), "银行卡 already exists");
+  assert.ok(plan.skipped.includes("银行卡"));
+  assert.equal(plan.add.find((a) => a.front === "注册").componentOf, "注册银行卡");
+  assert.deepEqual(planComponentCards(["银行"], new Set()).withoutParts, ["银行"]);
+
+  // only plain, short expressions are split
+  const odd = planComponentCards(["现场〔現場〕", "好 (as in 好久)", "不到长城非好汉"], new Set());
+  assert.equal(odd.add.length, 0);
+  assert.equal(odd.withoutParts.length, 3);
+
+  // parts that are not known words are left out and reported, not turned into cards
+  const real = new Set(["眼神", "接触"]);
+  const strict = planComponentCards(["眼神接触", "任重道远"], new Set(), (w) => real.has(w));
+  assert.deepEqual(strict.add.map((a) => a.front), ["眼神", "接触"]);
+  assert.ok(strict.unverified.length > 0, "fragments of the idiom are reported as left out");
+  assert.ok(strict.add.every((a) => a.componentOf === "眼神接触"));
+}
+
+// mergeDeck(): cards made here (components) aren't "missing" before they reach Anki.
+{
+  const rec = (id, front, extra = {}) => ({ id, front, forms: [front], type: "word", format: "old", oldBack: "", tags: "", sourceRow: 0, status: "approved", createdAt: 0, ...extra });
+  const r = mergeDeck([rec(1, "注册", { componentOf: "注册银行卡" }), rec(2, "旧词")], []);
+  assert.deepEqual(r.missingFronts, ["旧词"]);
 }
 
 console.log("smoke-test: all checks passed");

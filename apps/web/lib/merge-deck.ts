@@ -147,6 +147,9 @@ export function mergeDeck(existing: DeckUnitRecord[], incoming: DeckUnit[]): Mer
 
   for (const old of olds) {
     if (pairedOld.has(old)) continue;
+    // Component cards are made here and only reach Anki when imported; until then
+    // they are not "missing" from the export, just not there yet.
+    if (old.componentOf && old.ankiNoteId === undefined) continue;
     result.missingFronts.push(old.front);
     if (!old.missing) result.update.push({ id: old.id!, changes: { missing: true } });
   }
