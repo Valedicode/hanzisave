@@ -1,4 +1,5 @@
 import type { CardRequest } from "./llm/types";
+import { withPatternPinyin } from "./pattern-pinyin";
 
 export class CardRequestError extends Error {
   constructor(
@@ -16,7 +17,7 @@ export class CardRequestError extends Error {
   }
 }
 
-// Calls POST /api/card; resolves to the model's Back text.
+// Calls POST /api/card; resolves to the card Back, with pinyin added to its patterns.
 export async function requestCard(req: CardRequest, accessCode?: string): Promise<string> {
   const res = await fetch("/api/card", {
     method: "POST",
@@ -27,5 +28,6 @@ export async function requestCard(req: CardRequest, accessCode?: string): Promis
   if (!res.ok) {
     throw new CardRequestError(body.error ?? `card request failed (${res.status})`, res.status, body.problems);
   }
-  return body.back as string;
+  // Every card gets pinyin on its pattern lines, whichever screen asked for it.
+  return withPatternPinyin(body.back as string);
 }
