@@ -16,6 +16,7 @@ import { generateValidCard } from "../lib/card-service.ts";
 import { buildAnkiTsv, splitChanged } from "../lib/rewrite.ts";
 import { mergeDeck } from "../lib/merge-deck.ts";
 import { scanText } from "../lib/scan.ts";
+import { planComponentCards, splitComponents } from "../lib/components.ts";
 import { estimateRemainingMs, formatEta } from "../lib/eta.ts";
 import { parseBackup, serializeBackup } from "../lib/backup.ts";
 import { readApkg } from "../lib/apkg.ts";
@@ -441,6 +442,24 @@ import { join } from "node:path";
   assert.equal(formatEta(45_000), "~45 s left");
   assert.equal(formatEta(4 * 60_000), "~4 min left");
   assert.equal(formatEta(75 * 60_000), "~1 h 15 min left");
+}
+
+// splitComponents()/planComponentCards(): phrases split into parts; duplicates and lone characters never become cards.
+{
+  assert.deepEqual(splitComponents("注册银行卡", new Set()), ["注册", "银行卡"]);
+  // a phrase the learner already has must still be split
+  assert.deepEqual(splitComponents("注册银行卡", new Set(["注册银行卡"])), ["注册", "银行卡"]);
+  assert.deepEqual(splitComponents("银行", new Set()), [], "a single word is not a phrase");
+  assert.ok(splitComponents("快递员", new Set()).every((p) => p.length >= 2), "single characters are dropped");
+
+  const plan = planComponentCards(["注册银行卡", "注册账号"], new Set(["银行卡"]));
+  const fronts = plan.add.map((a) => a.front);
+  assert.ok(fronts.includes("注册"), "注册 is new");
+  assert.equal(fronts.filter((f) => f === "注册").length, 1, "added once even though two phrases contain it");
+  assert.ok(!fronts.includes("银行卡"), "银行卡 already exists");
+  assert.ok(plan.skipped.includes("银行卡"));
+  assert.equal(plan.add.find((a) => a.front === "注册").componentOf, "注册银行卡");
+  assert.deepEqual(planComponentCards(["银行"], new Set()).withoutParts, ["银行"]);
 }
 
 console.log("smoke-test: all checks passed");
