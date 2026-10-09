@@ -34,6 +34,7 @@ export default function RewritePage() {
   const [loaded, setLoaded] = useState(false);
   const [filter, setFilter] = useState<Filter>("pending");
   const [page, setPage] = useState(0);
+  const [query, setQuery] = useState("");
   const [accessCode, setAccessCode] = useState("");
   const [running, setRunning] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState("");
@@ -67,7 +68,15 @@ export default function RewritePage() {
     return new Set([...seen].filter(([, n]) => n > 1).map(([f]) => f));
   }, [units]);
 
-  const shown = useMemo(() => units.filter((u) => filter === "all" || u.status === filter), [units, filter]);
+  // A search looks through every card, whatever tab is open.
+  const needle = query.trim();
+  const shown = useMemo(
+    () =>
+      needle
+        ? units.filter((u) => u.front.includes(needle) || u.forms.some((f) => f.includes(needle)) || u.oldBack.includes(needle))
+        : units.filter((u) => filter === "all" || u.status === filter),
+    [units, filter, needle],
+  );
   const pageCount = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
   const visible = shown.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const visibleIds = visible.map((u) => u.id!);
@@ -206,6 +215,22 @@ export default function RewritePage() {
         </div>
         {exported && <div className={styles.hint}>{exported}</div>}
       </div>
+
+      <input
+        className={styles.search}
+        type="search"
+        placeholder="Search hanzi, pinyin or meaning…"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setPage(0);
+        }}
+      />
+      {needle && (
+        <div className={styles.hint}>
+          {shown.length} {shown.length === 1 ? "card matches" : "cards match"} “{needle}” across all lists.
+        </div>
+      )}
 
       <div className={styles.tabs}>
         {FILTERS.map((f) => (
