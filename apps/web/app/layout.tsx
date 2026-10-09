@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { PersistStorage } from "./persist-storage";
 import { RegisterServiceWorker } from "./register-sw";
 import { THEME_KEY } from "@/lib/theme";
 import { SiteHeader } from "./site-header";
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body>
         <SiteHeader />
         {children}
+        <PersistStorage />
         <RegisterServiceWorker />
       </body>
     </html>
