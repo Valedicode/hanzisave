@@ -146,3 +146,65 @@
   opacity: 0.6;
   cursor: default;
 }
+
+/* File drop zone */
+.drop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 28px 20px;
+  border: 2px dashed var(--line);
+  border-radius: 18px;
+  background: var(--bg);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.drop:hover,
+.dragging {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.drop:focus-within {
+  outline: 3px solid var(--brand);
+  outline-offset: 3px;
+}
+
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.dropIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 6px;
+  border-radius: 14px;
+  background: var(--brand);
+  color: var(--brand-ink);
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.dropTitle {
+  font-size: 16px;
+  font-weight: 900;
+  word-break: break-all;
+}
+
+.dropHint {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink2);
+}

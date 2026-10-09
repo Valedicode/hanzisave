@@ -25,6 +25,7 @@ export default function ImportPage() {
   const [existing, setExisting] = useState<{ units: number; known: number } | null>(null);
   const [library, setLibrary] = useState<DeckUnitRecord[]>([]);
   const [saving, setSaving] = useState(false);
+  const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
     fetch("/hsk30-index.json")
@@ -162,11 +163,33 @@ export default function ImportPage() {
           cards stay matched even if you edit a word later. A plain-text export (<b>Notes in Plain Text</b>, HTML
           kept) also works, but matches by the word itself.
         </p>
-        <input
-          type="file"
-          accept=".apkg,.txt,.tsv,text/plain"
-          onChange={(e) => onFile(e.target.files?.[0])}
-        />
+        <label
+          className={`${styles.drop} ${dragging ? styles.dragging : ""}`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            onFile(e.dataTransfer.files?.[0]);
+          }}
+        >
+          <input
+            className={styles.fileInput}
+            type="file"
+            accept=".apkg,.txt,.tsv,text/plain"
+            onChange={(e) => onFile(e.target.files?.[0])}
+          />
+          <span className={styles.dropIcon} aria-hidden="true">
+            ↑
+          </span>
+          <span className={styles.dropTitle}>{fileName || "Choose your Anki export"}</span>
+          <span className={styles.dropHint}>
+            {fileName ? "Choose a different file" : ".apkg or .txt, or drop the file here"}
+          </span>
+        </label>
         {indexError && <div className={styles.error}>{indexError}</div>}
         {loadError && <div className={styles.error}>{loadError}</div>}
       </div>
