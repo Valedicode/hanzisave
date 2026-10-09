@@ -63,7 +63,27 @@ export function mergeDeck(existing: DeckUnitRecord[], incoming: DeckUnit[]): Mer
     }
   }
 
-  // Pass 2: whatever is left, by front text.
+  // Pass 2: cards still without a match, by identical front and Back. This keeps
+  // two copies of the same word (two notes) from trading ids when they are
+  // listed in a different order.
+  const sameContent = (a: { front: string; oldBack: string }) => `${a.front}\u0000${a.oldBack}`;
+  const oldByContent = new Map<string, DeckUnitRecord[]>();
+  for (const o of olds) {
+    if (pairedOld.has(o)) continue;
+    const k = sameContent(o);
+    oldByContent.set(k, [...(oldByContent.get(k) ?? []), o]);
+  }
+  for (const n of incoming) {
+    if (pairedNew.has(n)) continue;
+    const o = oldByContent.get(sameContent(n))?.shift();
+    if (o) {
+      pairs.push([o, n]);
+      pairedOld.add(o);
+      pairedNew.add(n);
+    }
+  }
+
+  // Pass 3: whatever is left, by front text and occurrence.
   const oldByFront = frontKeys(olds.filter((o) => !pairedOld.has(o)));
   const newByFront = frontKeys(incoming.filter((n) => !pairedNew.has(n)));
   for (const [key, n] of newByFront) {

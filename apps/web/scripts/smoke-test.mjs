@@ -342,4 +342,15 @@ import { join } from "node:path";
   assert.equal(plan.units[0].ankiNoteId, 7);
 }
 
+// mergeDeck(): id-less duplicates adopt the right ids even when the export lists them in another order.
+{
+  const rec = (id, front, oldBack) => ({ id, front, forms: [front], type: "word", format: "old", oldBack, tags: "", sourceRow: id, status: "pending", createdAt: 0 });
+  const unit = (front, oldBack, ankiNoteId) => ({ front, forms: [front], type: "word", format: "old", oldBack, tags: "", sourceRow: 1, ankiNoteId });
+  const r = mergeDeck([rec(1, "F", "first"), rec(2, "F", "second")], [unit("F", "second", 11), unit("F", "first", 10)]);
+  const byId = Object.fromEntries(r.update.map((u) => [u.id, u.changes]));
+  assert.equal(byId[1].ankiNoteId, 10);
+  assert.equal(byId[2].ankiNoteId, 11);
+  assert.equal(r.changedFronts.length, 0);
+}
+
 console.log("smoke-test: all checks passed");
