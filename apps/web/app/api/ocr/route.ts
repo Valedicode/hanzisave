@@ -8,6 +8,8 @@ import { LlmError } from "@/lib/llm/types";
 const MAX_BYTES = 4 * 1024 * 1024;
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
+export const maxDuration = 60;
+
 // POST the raw image bytes with their content type; responds with the Chinese text found.
 export async function POST(req: Request) {
   if (!hasAccess(req)) {
