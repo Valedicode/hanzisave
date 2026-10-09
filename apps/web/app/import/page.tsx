@@ -8,6 +8,7 @@ import { buildDeckPlan, type CardType } from "@/lib/deck-plan";
 import type { Hsk30Index } from "@/lib/split-front";
 import { db, type DeckUnitRecord } from "@/lib/db";
 import { mergeDeck } from "@/lib/merge-deck";
+import { BackupPanel } from "../backup-panel";
 
 type Choice = "keep" | "split";
 
@@ -132,6 +133,8 @@ export default function ImportPage() {
           the imported ones.
         </div>
       )}
+
+      <BackupPanel className={styles.panel} />
 
       <div className={styles.panel}>
         <p className={styles.hint}>
