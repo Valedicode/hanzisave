@@ -69,6 +69,19 @@ export interface KnownRecord {
   createdAt: number;
 }
 
+// A word met while reading, on its way to becoming a card.
+export interface NewCardRecord {
+  id?: number;
+  front: string;
+  level: number | null; // HSK level from the lexicon, null if not in the HSK list
+  context: string; // the sentence it was met in
+  status: "queued" | "generated" | "approved" | "failed" | "discarded";
+  back?: string;
+  problems?: string[];
+  exportedAt?: number; // set once the card has been downloaded for Anki
+  createdAt: number;
+}
+
 export const db = new Dexie("hanzisave") as Dexie & {
   texts: EntityTable<TextRecord, "id">;
   cards: EntityTable<CardRecord, "id">;
@@ -76,6 +89,7 @@ export const db = new Dexie("hanzisave") as Dexie & {
   gloss_cache: EntityTable<GlossCacheRecord, "key">;
   deck_units: EntityTable<DeckUnitRecord, "id">;
   known: EntityTable<KnownRecord, "key">;
+  new_cards: EntityTable<NewCardRecord, "id">;
 };
 
 db.version(1).stores({
@@ -101,3 +115,5 @@ db.version(3)
         u.status ??= "pending";
       }),
   );
+
+db.version(4).stores({ new_cards: "++id, front, status" });
