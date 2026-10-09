@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./rewrite.module.css";
 import { db, type DeckUnitRecord } from "@/lib/db";
 import { CardRequestError, requestCard } from "@/lib/card-client";
+import { getAccessCode, setAccessCode as storeAccessCode } from "@/lib/access-code";
 import { buildAnkiTsv, splitChanged } from "@/lib/rewrite";
 
 type Status = DeckUnitRecord["status"];
@@ -22,7 +23,6 @@ const FILTERS: { key: Filter; label: string }[] = [
 const PAGE_SIZE = 15;
 const BATCH = 25;
 const CONCURRENCY = 3;
-const CODE_KEY = "hanzisave.accessCode";
 
 // Cards that have a rewrite waiting for approval.
 const approvable = (u: DeckUnitRecord) => !!u.newBack && u.status !== "approved";
@@ -45,11 +45,7 @@ export default function RewritePage() {
   useEffect(() => {
     db.deck_units.toArray().then((all) => {
       setUnits(all);
-      try {
-        setAccessCode(localStorage.getItem(CODE_KEY) ?? "");
-      } catch {
-        // storage can be unavailable (private window); the code just isn't remembered
-      }
+      setAccessCode(getAccessCode());
       setLoaded(true);
     });
   }, []);
@@ -136,11 +132,7 @@ export default function RewritePage() {
 
   const saveAccessCode = (value: string) => {
     setAccessCode(value);
-    try {
-      localStorage.setItem(CODE_KEY, value);
-    } catch {
-      // see above
-    }
+    storeAccessCode(value);
   };
 
   const exportApproved = () => {
