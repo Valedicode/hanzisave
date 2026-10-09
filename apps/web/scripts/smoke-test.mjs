@@ -5,7 +5,7 @@ import { segment } from "../lib/segment.ts";
 import { analyze } from "../lib/analyze.ts";
 import { supportedMax } from "../lib/level.ts";
 import { hashString } from "../lib/hash.ts";
-import { parseAnkiExport } from "../lib/anki-import.ts";
+import { parseAnkiExport, notesFromApkg } from "../lib/anki-import.ts";
 import { planSplit } from "../lib/split-front.ts";
 import { buildDeckPlan } from "../lib/deck-plan.ts";
 import { buildCardPrompt, cleanCardOutput } from "../lib/card-prompt.ts";
@@ -295,6 +295,51 @@ import { join } from "node:path";
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+// mergeDeck() with Anki ids: exact pairing survives swapped duplicates and edited fronts; id-less cards adopt ids.
+{
+  const rec = (id, front, oldBack, status, extra = {}) => ({
+    id, front, forms: [front], type: "word", format: "old", oldBack, tags: "", sourceRow: id, status, createdAt: 0, ...extra,
+  });
+  const unit = (front, oldBack, extra = {}) => ({ front, forms: [front], type: "word", format: "old", oldBack, tags: "", sourceRow: 1, ...extra });
+  const existing = [
+    rec(1, "F", "first", "approved", { newBack: "n1", ankiNoteId: 10 }),
+    rec(2, "F", "second", "approved", { newBack: "n2", ankiNoteId: 11 }),
+    rec(3, "G", "g", "approved", { newBack: "n3", ankiNoteId: 20 }),
+    rec(4, "H", "h", "pending"), // imported from text, no id yet
+  ];
+  const incoming = [
+    unit("F", "second", { ankiNoteId: 11 }), // duplicate fronts listed in the other order
+    unit("F", "first", { ankiNoteId: 10 }),
+    unit("G2", "g", { ankiNoteId: 20 }), // front edited in Anki
+    unit("H", "h", { ankiNoteId: 30 }), // matched by front, adopts the id
+  ];
+  const r = mergeDeck(existing, incoming);
+  const byId = Object.fromEntries(r.update.map((u) => [u.id, u.changes]));
+  assert.deepEqual(r.addedFronts, []);
+  assert.deepEqual(r.missingFronts, []);
+  assert.equal(1 in byId && "stale" in byId[1], false); // right history stays with the right card
+  assert.equal(2 in byId && "stale" in byId[2], false);
+  assert.deepEqual([byId[3].front, byId[3].stale], ["G2", true]); // renamed -> stale, still the same card
+  assert.equal(byId[4].ankiNoteId, 30);
+  assert.deepEqual(r.staleFronts, ["G2"]);
+
+  // split parts share a note id but stay distinct cards
+  const parts = [rec(5, "优惠", "x", "pending", { ankiNoteId: 40, splitFrom: "优惠 / 会员" }), rec(6, "会员", "x", "pending", { ankiNoteId: 40, splitFrom: "优惠 / 会员" })];
+  const same = mergeDeck(parts, [unit("优惠", "x", { ankiNoteId: 40, splitFrom: "优惠 / 会员" }), unit("会员", "x", { ankiNoteId: 40, splitFrom: "优惠 / 会员" })]);
+  assert.equal(same.add.length, 0);
+  assert.equal(same.unchanged, 2);
+}
+
+// notesFromApkg(): ids and cleaned text carry through to the parsed deck.
+{
+  const deck = notesFromApkg([{ noteId: 7, guid: "g", fields: ["<div>国土</div>", "guótǔ<br>territory"], tags: " x " }, { noteId: 8, guid: "h", fields: ["", "empty"], tags: "" }]);
+  assert.equal(deck.notes.length, 1);
+  assert.equal(deck.skipped, 1);
+  assert.deepEqual([deck.notes[0].front, deck.notes[0].ankiNoteId, deck.notes[0].ankiGuid, deck.notes[0].tags], ["国土", 7, "g", "x"]);
+  const plan = buildDeckPlan(deck, { entries: {}, forms: {} });
+  assert.equal(plan.units[0].ankiNoteId, 7);
 }
 
 console.log("smoke-test: all checks passed");

@@ -1,6 +1,10 @@
 // Merges a fresh Anki export into the cards already in the library without
 // discarding work: rewrites and approvals survive, new notes arrive as pending,
 // and cards whose source changed in Anki are flagged instead of overwritten.
+//
+// Cards are paired by Anki note id when both sides have one (exact, survives
+// edited fronts and duplicate words); cards without an id fall back to their
+// front text, and adopt the id when they get matched.
 
 import type { DeckUnit } from "./deck-plan";
 import type { DeckUnitRecord } from "./db";
@@ -15,9 +19,16 @@ export interface MergeResult {
   unchanged: number;
 }
 
-// Fronts can repeat (the same word as two separate notes), so a card is
-// identified by its front plus which occurrence of that front it is.
-function keyed<T extends { front: string }>(items: T[]): Map<string, T> {
+// A note split into several cards shares one note id, so the part's front is
+// part of the identity; an unsplit card is identified by the note id alone.
+function idKey(u: { ankiNoteId?: number; splitFrom?: string; front: string }): string | undefined {
+  if (u.ankiNoteId === undefined) return undefined;
+  return u.splitFrom ? `n${u.ankiNoteId}|${u.front}` : `n${u.ankiNoteId}`;
+}
+
+// Fronts can repeat (the same word as two separate notes), so without ids a
+// card is identified by its front plus which occurrence of that front it is.
+function frontKeys<T extends { front: string }>(items: T[]): Map<string, T> {
   const seen = new Map<string, number>();
   const out = new Map<string, T>();
   for (const item of items) {
@@ -31,11 +42,41 @@ function keyed<T extends { front: string }>(items: T[]): Map<string, T> {
 const REWRITTEN: DeckUnitRecord["status"][] = ["generated", "approved"];
 
 export function mergeDeck(existing: DeckUnitRecord[], incoming: DeckUnit[]): MergeResult {
-  const current = keyed([...existing].sort((a, b) => (a.id ?? 0) - (b.id ?? 0)));
-  const fresh = keyed(incoming);
+  const olds = [...existing].sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+  const pairs: [DeckUnitRecord, DeckUnit][] = [];
+  const pairedOld = new Set<DeckUnitRecord>();
+  const pairedNew = new Set<DeckUnit>();
+
+  // Pass 1: exact, by Anki note id.
+  const oldById = new Map<string, DeckUnitRecord>();
+  for (const o of olds) {
+    const k = idKey(o);
+    if (k && !oldById.has(k)) oldById.set(k, o);
+  }
+  for (const n of incoming) {
+    const k = idKey(n);
+    const o = k ? oldById.get(k) : undefined;
+    if (o && !pairedOld.has(o)) {
+      pairs.push([o, n]);
+      pairedOld.add(o);
+      pairedNew.add(n);
+    }
+  }
+
+  // Pass 2: whatever is left, by front text.
+  const oldByFront = frontKeys(olds.filter((o) => !pairedOld.has(o)));
+  const newByFront = frontKeys(incoming.filter((n) => !pairedNew.has(n)));
+  for (const [key, n] of newByFront) {
+    const o = oldByFront.get(key);
+    if (o) {
+      pairs.push([o, n]);
+      pairedOld.add(o);
+      pairedNew.add(n);
+    }
+  }
 
   const result: MergeResult = {
-    add: [],
+    add: incoming.filter((n) => !pairedNew.has(n)),
     update: [],
     addedFronts: [],
     changedFronts: [],
@@ -43,18 +84,13 @@ export function mergeDeck(existing: DeckUnitRecord[], incoming: DeckUnit[]): Mer
     missingFronts: [],
     unchanged: 0,
   };
+  result.addedFronts = result.add.map((n) => n.front);
 
-  for (const [key, unit] of fresh) {
-    const old = current.get(key);
-    if (!old) {
-      result.add.push(unit);
-      result.addedFronts.push(unit.front);
-      continue;
-    }
-
+  for (const [old, unit] of pairs) {
     const changes: Partial<DeckUnitRecord> = {};
-    const sourceChanged = old.oldBack !== unit.oldBack || old.type !== unit.type;
+    const sourceChanged = old.oldBack !== unit.oldBack || old.type !== unit.type || old.front !== unit.front;
     if (sourceChanged) {
+      changes.front = unit.front;
       changes.oldBack = unit.oldBack;
       changes.type = unit.type;
       changes.format = unit.format;
@@ -69,14 +105,16 @@ export function mergeDeck(existing: DeckUnitRecord[], incoming: DeckUnit[]): Mer
     if (old.splitFrom !== unit.splitFrom) changes.splitFrom = unit.splitFrom;
     if (old.sourceRow !== unit.sourceRow) changes.sourceRow = unit.sourceRow;
     if (old.forms.join("|") !== unit.forms.join("|")) changes.forms = unit.forms;
+    if (unit.ankiNoteId !== undefined && old.ankiNoteId !== unit.ankiNoteId) changes.ankiNoteId = unit.ankiNoteId;
+    if (unit.ankiGuid !== undefined && old.ankiGuid !== unit.ankiGuid) changes.ankiGuid = unit.ankiGuid;
     if (old.missing) changes.missing = false;
 
     if (Object.keys(changes).length > 0) result.update.push({ id: old.id!, changes });
     if (!sourceChanged) result.unchanged++;
   }
 
-  for (const [key, old] of current) {
-    if (fresh.has(key)) continue;
+  for (const old of olds) {
+    if (pairedOld.has(old)) continue;
     result.missingFronts.push(old.front);
     if (!old.missing) result.update.push({ id: old.id!, changes: { missing: true } });
   }
