@@ -159,22 +159,17 @@ export default function RewritePage() {
 
   const generateBatch = async () => runQueue((await sortOutFormatted(pendingCards())).slice(0, BATCH));
 
+  // Step 1 is the free format check: cards already in the new format are set aside.
+  // Step 2 asks before spending anything, with the real number left to generate.
   const generateAll = async () => {
-    const toCheck = pendingCards();
-    const formatted = toCheck.filter(alreadyInFormat).length;
-    const toGenerate = toCheck.length - formatted;
+    const before = pendingCards().length;
+    const remaining = await sortOutFormatted(pendingCards());
+    if (remaining.length === 0) return;
     const ok = window.confirm(
-      `Generate ${toGenerate} cards? ${formatted} already in the new format will be skipped. ` +
-        `Estimated cost about $${(toGenerate * COST_PER_CARD).toFixed(2)}.`,
+      `${before - remaining.length} cards were already in the new format and set aside. ` +
+        `Generate the other ${remaining.length}? Estimated cost about $${(remaining.length * COST_PER_CARD).toFixed(2)}.`,
     );
-    if (!ok) return;
-    await runQueue(await sortOutFormatted(toCheck));
-  };
-
-  const checkFormats = async () => {
-    const toCheck = pendingCards();
-    await sortOutFormatted(toCheck);
-    if (!toCheck.some(alreadyInFormat)) setNotice("No pending card already follows the new format.");
+    if (ok) await runQueue(remaining);
   };
 
   // Cards the user picked explicitly are generated even if they look formatted;
@@ -265,9 +260,6 @@ export default function RewritePage() {
           </button>
           <button className={styles.secondary} onClick={generateAll} disabled={!!running || counts.pending === 0}>
             Generate all {counts.pending}
-          </button>
-          <button className={styles.secondary} onClick={checkFormats} disabled={!!running || counts.pending === 0}>
-            Check formats (free)
           </button>
           {running && (
             <button className={styles.secondary} onClick={() => (stop.current = true)}>
