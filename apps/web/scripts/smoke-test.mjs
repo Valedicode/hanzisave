@@ -8,6 +8,11 @@ import { hashString } from "../lib/hash.ts";
 import { parseAnkiExport } from "../lib/anki-import.ts";
 import { planSplit } from "../lib/split-front.ts";
 import { buildDeckPlan } from "../lib/deck-plan.ts";
+import { buildCardPrompt, cleanCardOutput } from "../lib/card-prompt.ts";
+import { hasAccess } from "../lib/access.ts";
+import { checkCardFormat } from "../lib/card-format.ts";
+import { parseReasoning } from "../lib/llm/reasoning.ts";
+import { generateValidCard } from "../lib/card-service.ts";
 
 // Longest-match re-merge: ICU splits 电脑 into 电+脑, lexicon has 电脑 (HSK1).
 {
@@ -114,6 +119,66 @@ import { buildDeckPlan } from "../lib/deck-plan.ts";
   const forced = buildDeckPlan(deck, index, new Map([[1, "keep"]])); // official split can't be overridden
   assert.equal(forced.units[0].front, "优惠");
   assert.equal(plan.known.length, 5);
+}
+
+// buildCardPrompt()/cleanCardOutput(): the prompt carries only the fields given;
+// output loses a wrapping code fence but keeps inner content intact.
+{
+  assert.equal(buildCardPrompt({ item: "打车", type: "word" }), ["item: 打车", "type: word"].join(String.fromCharCode(10)));
+  const full = buildCardPrompt({ item: "下单", type: "word", context: "我下单了", hsk: "3", oldBack: "xiàdān" });
+  assert.ok(full.includes("context: 我下单了") && full.includes("hsk: 3") && full.endsWith("xiàdān"));
+  const NL = String.fromCharCode(10);
+  assert.equal(cleanCardOutput("```" + NL + "Pinyin: dǎ chē" + NL + "```"), "Pinyin: dǎ chē");
+  assert.equal(cleanCardOutput("  Pinyin: dǎ chē  "), "Pinyin: dǎ chē");
+}
+
+// hasAccess(): exact match on the x-access-code header; wrong or missing fails.
+{
+  const req = (code) => new Request("http://x/api/card", { headers: code ? { "x-access-code": code } : {} });
+  assert.equal(hasAccess(req("secret"), "secret"), true);
+  assert.equal(hasAccess(req("secreX"), "secret"), false);
+  assert.equal(hasAccess(req("secret!"), "secret"), false); // different length
+  assert.equal(hasAccess(req(), "secret"), false);
+}
+
+// checkCardFormat(): a complete card passes; missing labels, fences and markdown are reported.
+{
+  const NL = String.fromCharCode(10);
+  const word = [
+    "Pinyin: dǎ chē", "Jyutping: daa2 ce1", "Used in Cantonese: No", "Part of speech: Verb",
+    "Register: Informal", "Translation: to take a taxi", "Patterns:", "- 打车 + 去 + 地点 (take a taxi to a place)",
+    "Example: 我们打车去机场吧。", "Wǒmen dǎchē qù jīchǎng ba.", "Let's take a taxi to the airport.",
+  ].join(NL);
+  assert.deepEqual(checkCardFormat(word, "word"), { ok: true, problems: [] });
+  const broken = checkCardFormat(word.replace("Jyutping: daa2 ce1" + NL, ""), "word");
+  assert.deepEqual(broken.problems, ["missing Jyutping:"]);
+  assert.ok(checkCardFormat("**Pinyin:** x", "word").problems.includes("contains markdown"));
+  const gaveUp = checkCardFormat(word.replace("Translation: to take a taxi", "Translation: unsure"), "word");
+  assert.deepEqual(gaveUp.problems, ["Translation: is unsure"]);
+  const grammar = checkCardFormat(word, "grammar");
+  assert.ok(grammar.problems.includes("missing Pattern:") && grammar.problems.includes("grammar card needs two Example lines"));
+}
+
+// parseReasoning(): off disables, levels set effort, anything else leaves the default.
+{
+  assert.deepEqual(parseReasoning("off"), { enabled: false });
+  assert.deepEqual(parseReasoning(" Low "), { effort: "low" });
+  assert.equal(parseReasoning(""), undefined);
+  assert.equal(parseReasoning(undefined), undefined);
+  assert.equal(parseReasoning("max"), undefined);
+}
+
+// generateValidCard(): retries once on an unusable card, then reports the problems.
+{
+  const NL = String.fromCharCode(10);
+  const good = ["Pinyin: a", "Jyutping: b", "Used in Cantonese: No", "Part of speech: Verb", "Register: Neutral", "Translation: t", "Patterns:", "- p", "Example: e"].join(NL);
+  const bad = good.replace("Translation: t", "Translation: unsure");
+  const seq = (...outs) => { let i = 0; return { generateCard: async () => outs[Math.min(i++, outs.length - 1)] }; };
+  const req = { item: "x", type: "word" };
+  assert.deepEqual(await generateValidCard(seq(bad, good), req, "spec"), { ok: true, back: good });
+  const failed = await generateValidCard(seq(bad), req, "spec");
+  assert.equal(failed.ok, false);
+  assert.deepEqual(failed.problems, ["Translation: is unsure"]);
 }
 
 console.log("smoke-test: all checks passed");

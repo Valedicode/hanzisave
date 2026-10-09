@@ -1,0 +1,49 @@
+import OpenAI from "openai";
+import { buildCardPrompt, cleanCardOutput } from "../card-prompt";
+import { parseReasoning } from "./reasoning";
+import { LlmError, type CardRequest, type LlmProvider } from "./types";
+
+const DEFAULT_MODEL = "gpt-5.4-mini";
+
+function toLlmError(error: unknown): LlmError {
+  if (error instanceof OpenAI.AuthenticationError) {
+    return new LlmError("OPENAI_API_KEY is missing or invalid", 401);
+  }
+  if (error instanceof OpenAI.RateLimitError) {
+    if (error.code === "insufficient_quota" || error.code === "credit_balance_exhausted") {
+      return new LlmError("OpenAI credits exhausted; add credits or switch provider", 402);
+    }
+    return new LlmError("rate limited, try again shortly", 429);
+  }
+  if (error instanceof OpenAI.APIError) {
+    return new LlmError(error.message, error.status ?? 502);
+  }
+  return new LlmError("card request failed", 500);
+}
+
+export function createOpenAiProvider(
+  client: OpenAI = new OpenAI(),
+  model: string = process.env.CARD_MODEL || DEFAULT_MODEL,
+  reasoning = parseReasoning(process.env.CARD_REASONING),
+): LlmProvider {
+  return {
+    async generateCard(req: CardRequest, spec: string) {
+      try {
+        const completion = await client.chat.completions.create({
+          model,
+          messages: [
+            { role: "system", content: spec },
+            { role: "user", content: buildCardPrompt(req) },
+          ],
+          // OpenRouter extension, not in the OpenAI SDK types; ignored by endpoints without it.
+          ...(reasoning && { reasoning }),
+        } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming);
+        const text = completion.choices[0]?.message.content;
+        if (!text) throw new LlmError("model returned no content", 502);
+        return cleanCardOutput(text);
+      } catch (error) {
+        throw error instanceof LlmError ? error : toLlmError(error);
+      }
+    },
+  };
+}
