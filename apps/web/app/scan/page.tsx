@@ -9,12 +9,15 @@ import { Spinner } from "../spinner";
 import { WordPreview, type PreviewTarget } from "./word-preview";
 import { CardRequestError, requestCard } from "@/lib/card-client";
 import { resizeImage } from "@/lib/image-resize";
+import { CardPrefetcher, type PrefetchProgress } from "@/lib/card-prefetch";
 import { loadKnownWords, markKnown } from "@/lib/known-db";
 import { buildAnkiTsv } from "@/lib/rewrite";
 import { markText, scanText, type MarkedSentence, type NewWord, type ScanResult } from "@/lib/scan";
 
 const FLOOR_KEY = "hanzisave.levelFloor";
 const CONCURRENCY = 3;
+// A card made ahead of time is reused for a week; the card spec may change after that.
+const CACHE_DAYS = 7;
 
 const LEVEL_COLOR: Record<number, string> = {
   1: "var(--h1)",
@@ -26,6 +29,26 @@ const LEVEL_COLOR: Record<number, string> = {
 };
 
 export default function ScanPage() {
+  const [prefetch, setPrefetch] = useState<PrefetchProgress>({ ready: 0, total: 0 });
+  const [prefetcher] = useState(
+    () =>
+      new CardPrefetcher({
+        generate: (word, sentence) =>
+          requestCard({ item: word, type: "word", context: sentence }, getAccessCode() || undefined),
+        cache: {
+          get: async (key) => {
+            const hit = await db.card_cache.get(key);
+            return hit && Date.now() - hit.createdAt < CACHE_DAYS * 86_400_000 ? hit.back : undefined;
+          },
+          put: async (key, back) => {
+            await db.card_cache.put({ key, back, createdAt: Date.now() });
+          },
+        },
+        concurrency: CONCURRENCY,
+        isFatal: (e) => e instanceof CardRequestError && e.fatal,
+        onProgress: (p) => setPrefetch(p),
+      }),
+  );
   const [text, setText] = useState("");
   // HSK 1-2 words are hidden by default; the deck's basics aren't all in Anki, and they are noise.
   const [levelFloor, setLevelFloor] = useState(2);
@@ -43,6 +66,9 @@ export default function ScanPage() {
   const [needsCode, setNeedsCode] = useState(false);
   const [editing, setEditing] = useState<{ id: number; text: string } | null>(null);
   const [message, setMessage] = useState("");
+
+  // Leaving the page stops the background work that has not started.
+  useEffect(() => () => prefetcher.cancel(), [prefetcher]);
 
   useEffect(() => {
     db.new_cards
@@ -106,7 +132,9 @@ export default function ScanPage() {
     setError("");
     setMessage("");
     const known = await loadKnownWords();
-    setResult(scanText(text, { known, levelFloor }));
+    const scanned = scanText(text, { known, levelFloor });
+    setResult(scanned);
+    prefetcher.start(scanned.newWords.map((w) => ({ word: w.surface, sentence: w.sentence.slice(0, 400) })));
     setMarked(markText(text, { known, levelFloor }));
     setPreview(null);
     setSelected(new Set());
@@ -126,6 +154,7 @@ export default function ScanPage() {
   };
 
   const iKnow = async (surfaces: string[]) => {
+    prefetcher.drop(surfaces);
     await markKnown(surfaces);
     removeFromResult(surfaces);
   };
@@ -138,13 +167,12 @@ export default function ScanPage() {
       return next;
     });
 
-  const generate = async (card: NewCardRecord) => {
+  // `fresh` skips the cache: Retry and Regenerate want a new card, not the one made ahead of time.
+  const generate = async (card: NewCardRecord, fresh = false) => {
     setBusy(card.id!, true);
     try {
-      const back = await requestCard(
-        { item: card.front, type: "word", context: card.context.slice(0, 400) },
-        getAccessCode() || undefined,
-      );
+      const sentence = card.context.slice(0, 400);
+      const back = fresh ? await prefetcher.fresh(card.front, sentence) : await prefetcher.request(card.front, sentence);
       await patchCard(card.id!, { status: "generated", back, problems: undefined });
     } catch (e) {
       const err = e instanceof CardRequestError ? e : new CardRequestError(String(e), 0);
@@ -298,7 +326,7 @@ export default function ScanPage() {
                       </>
                     )}
                     {(c.status === "failed" || c.status === "generated") && (
-                      <button className={styles.secondary} onClick={() => generate(c)} disabled={busyIds.has(c.id!)}>
+                      <button className={styles.secondary} onClick={() => generate(c, true)} disabled={busyIds.has(c.id!)}>
                         {busyIds.has(c.id!) && <Spinner />}
                         {c.back ? "Regenerate" : "Retry"}
                       </button>
@@ -405,6 +433,18 @@ export default function ScanPage() {
               Known
             </span>
           </div>
+          {prefetch.total > 0 && (
+            <div className={styles.hint}>
+              {prefetch.ready < prefetch.total ? (
+                <>
+                  <Spinner />
+                  Preparing cards in the background · {prefetch.ready} of {prefetch.total} ready
+                </>
+              ) : (
+                `${prefetch.total} cards are ready, so Make card is instant.`
+              )}
+            </div>
+          )}
           {marked.map((sentence, i) => (
             <p key={i} className={styles.reading}>
               {sentence.words.map((w, j) =>
