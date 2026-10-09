@@ -11,9 +11,16 @@ export interface CardRequest {
   oldBack?: string; // existing card Back, present only in rewrite mode
 }
 
+export interface ImageInput {
+  mime: string; // e.g. image/jpeg
+  data: string; // base64, without the data: prefix
+}
+
 export interface LlmProvider {
   // Returns the card Back text exactly as the model produced it.
   generateCard(req: CardRequest, spec: string): Promise<string>;
+  // Returns the Chinese text found in a photo or screenshot ("" if there is none).
+  extractText(image: ImageInput): Promise<string>;
 }
 
 // Errors a provider reports in vendor-neutral form; `status` is an HTTP status

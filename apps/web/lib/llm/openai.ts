@@ -1,7 +1,8 @@
 import OpenAI from "openai";
 import { buildCardPrompt, cleanCardOutput } from "../card-prompt";
+import { OCR_PROMPT } from "../ocr-prompt";
 import { parseReasoning } from "./reasoning";
-import { LlmError, type CardRequest, type LlmProvider } from "./types";
+import { LlmError, type CardRequest, type ImageInput, type LlmProvider } from "./types";
 
 const DEFAULT_MODEL = "gpt-5.4-mini";
 
@@ -25,6 +26,7 @@ export function createOpenAiProvider(
   client: OpenAI = new OpenAI(),
   model: string = process.env.CARD_MODEL || DEFAULT_MODEL,
   reasoning = parseReasoning(process.env.CARD_REASONING),
+  ocrModel: string = process.env.OCR_MODEL || model,
 ): LlmProvider {
   return {
     async generateCard(req: CardRequest, spec: string) {
@@ -41,6 +43,27 @@ export function createOpenAiProvider(
         const text = completion.choices[0]?.message.content;
         if (!text) throw new LlmError("model returned no content", 502);
         return cleanCardOutput(text);
+      } catch (error) {
+        throw error instanceof LlmError ? error : toLlmError(error);
+      }
+    },
+    async extractText(image: ImageInput) {
+      try {
+        const completion = await client.chat.completions.create({
+          model: ocrModel,
+          max_tokens: 2000,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: OCR_PROMPT },
+                { type: "image_url", image_url: { url: `data:${image.mime};base64,${image.data}` } },
+              ],
+            },
+          ],
+          ...(reasoning && { reasoning }),
+        } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming);
+        return (completion.choices[0]?.message.content ?? "").trim();
       } catch (error) {
         throw error instanceof LlmError ? error : toLlmError(error);
       }
