@@ -16,6 +16,7 @@ import { generateValidCard } from "../lib/card-service.ts";
 import { buildAnkiTsv, splitChanged } from "../lib/rewrite.ts";
 import { mergeDeck } from "../lib/merge-deck.ts";
 import { scanText } from "../lib/scan.ts";
+import { addPatternPinyin, withPatternPinyin } from "../lib/pattern-pinyin.ts";
 import { planComponentCards, splitComponents } from "../lib/components.ts";
 import { estimateRemainingMs, etaTracker, formatEta } from "../lib/eta.ts";
 import { parseBackup, serializeBackup } from "../lib/backup.ts";
@@ -482,6 +483,43 @@ import { join } from "node:path";
   const rec = (id, front, extra = {}) => ({ id, front, forms: [front], type: "word", format: "old", oldBack: "", tags: "", sourceRow: 0, status: "approved", createdAt: 0, ...extra });
   const r = mergeDeck([rec(1, "注册", { componentOf: "注册银行卡" }), rec(2, "旧词")], []);
   assert.deepEqual(r.missingFronts, ["旧词"]);
+}
+
+// addPatternPinyin(): pattern lines gain bracketed pinyin; nothing else changes; running twice is a no-op.
+{
+  const NL = String.fromCharCode(10);
+  const fake = (run) => "<" + run + ">";
+  const card = [
+    "Pinyin: jì huà",
+    "Part of speech: Noun",
+    "Patterns:",
+    "- 制定/做 + 计划 (make a plan)",
+    "- V + 得 + Adj (verb complement)",
+    "- A + B (no hanzi at all)",
+    "Example: 我们的旅行计划变了。",
+    "",
+    "Part of speech: Verb",
+    "Patterns:",
+    "- 计划 + V",
+    "Example: 他们正在计划婚礼。",
+  ].join(NL);
+  const out = addPatternPinyin(card, fake).split(NL);
+  assert.equal(out[3], "- 制定/做 + 计划 [<制定>/<做> + <计划>] (make a plan)");
+  assert.equal(out[4], "- V + 得 + Adj [V + de + Adj] (verb complement)", "a lone particle takes its grammatical reading");
+  assert.equal(out[5], "- A + B (no hanzi at all)", "lines without hanzi are untouched");
+  assert.equal(out[6], "Example: 我们的旅行计划变了。", "other lines are untouched");
+  assert.equal(out[10], "- 计划 + V [<计划> + V]", "a second Patterns section is handled, and a line with no gloss works");
+  assert.equal(out.length, card.split(NL).length);
+  assert.equal(addPatternPinyin(addPatternPinyin(card, fake), fake), addPatternPinyin(card, fake), "idempotent");
+
+  // with the real converter: context decides the reading (行 in 银行卡 is háng)
+  const real = await withPatternPinyin(["Patterns:", "- 打车 + 去 + 地点 (take a taxi)", "- 绑定 + 银行卡 (link a bank card)"].join(NL));
+  assert.equal(real.split(NL)[1], "- 打车 + 去 + 地点 [dǎchē + qù + dìdiǎn] (take a taxi)");
+  assert.equal(real.split(NL)[2], "- 绑定 + 银行卡 [bǎngdìng + yínhángkǎ] (link a bank card)");
+  // several words in one run are spaced like words elsewhere on the card
+  const multi = await withPatternPinyin(["Patterns:", "- 做某事 + 很热闹 (x)", "- 用语言 + 表达 (y)"].join(NL));
+  assert.equal(multi.split(NL)[1], "- 做某事 + 很热闹 [zuò mǒushì + hěn rènào] (x)");
+  assert.equal(multi.split(NL)[2], "- 用语言 + 表达 [yòng yǔyán + biǎodá] (y)");
 }
 
 console.log("smoke-test: all checks passed");
