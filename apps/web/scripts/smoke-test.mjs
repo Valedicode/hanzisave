@@ -14,6 +14,7 @@ import { checkCardFormat } from "../lib/card-format.ts";
 import { parseReasoning } from "../lib/llm/reasoning.ts";
 import { generateValidCard } from "../lib/card-service.ts";
 import { buildAnkiTsv, splitChanged } from "../lib/rewrite.ts";
+import { mergeDeck } from "../lib/merge-deck.ts";
 
 // Longest-match re-merge: ICU splits 电脑 into 电+脑, lexicon has 电脑 (HSK1).
 {
@@ -199,6 +200,45 @@ import { buildAnkiTsv, splitChanged } from "../lib/rewrite.ts";
   assert.deepEqual(parsed.notes.map((n) => n.front), ["国土", "又…又…"]);
   assert.equal(parsed.notes[0].backText, back);
   assert.equal(parsed.notes[1].tags, "old grammar");
+}
+
+// mergeDeck(): new notes are added, rewrites survive, changed sources are flagged, vanished notes marked.
+{
+  const rec = (id, front, oldBack, status, extra = {}) => ({
+    id, front, forms: [front], type: "word", format: "old", oldBack, tags: "", sourceRow: id, status, createdAt: 0, ...extra,
+  });
+  const unit = (front, oldBack, extra = {}) => ({ front, forms: [front], type: "word", format: "old", oldBack, tags: "", sourceRow: 1, ...extra });
+  const existing = [
+    rec(1, "A", "a", "approved", { newBack: "new a" }),
+    rec(2, "B", "b", "approved", { newBack: "new b" }),
+    rec(3, "C", "c", "pending"),
+    rec(4, "D", "d", "generated", { newBack: "new d" }),
+    rec(5, "E", "e", "skipped", { missing: true }),
+    rec(6, "F", "f1", "pending"),
+    rec(7, "F", "f2", "pending"),
+  ];
+  const incoming = [
+    unit("A", "a"), // unchanged
+    unit("B", "b edited"), // rewritten, source changed -> stale
+    unit("C", "c edited"), // pending, source changed -> just updated
+    unit("NEW", "n"), // added
+    unit("E", "e"), // back again -> missing cleared
+    unit("F", "f1"),
+    unit("F", "f2"), // duplicate fronts match by occurrence
+  ];
+  const r = mergeDeck(existing, incoming);
+  assert.deepEqual(r.addedFronts, ["NEW"]);
+  assert.deepEqual(r.changedFronts, ["B", "C"]);
+  assert.deepEqual(r.staleFronts, ["B"]);
+  assert.deepEqual(r.missingFronts, ["D"]);
+  assert.equal(r.unchanged, 4); // A, E, F, F
+  const byId = Object.fromEntries(r.update.map((u) => [u.id, u.changes]));
+  assert.equal(byId[2].stale, true);
+  assert.equal(byId[2].oldBack, "b edited");
+  assert.equal("stale" in byId[3], false); // pending cards aren't marked stale
+  assert.equal(byId[4].missing, true);
+  assert.equal(byId[5].missing, false);
+  assert.equal(1 in byId, false); // untouched
 }
 
 console.log("smoke-test: all checks passed");
