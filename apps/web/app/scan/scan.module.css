@@ -183,3 +183,102 @@
   opacity: 0.5;
   cursor: default;
 }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink2);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dotNew {
+  background: var(--brand);
+}
+
+.dotKnown {
+  background: var(--oov);
+}
+
+.reading {
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 22px;
+  line-height: 2.2;
+}
+
+.rwKnown {
+  color: var(--oov);
+}
+
+.rw {
+  font: inherit;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.rwNew {
+  color: var(--brand-deep);
+  font-weight: 700;
+  background: var(--brand-soft);
+  border-bottom-color: var(--brand);
+  border-radius: 4px 4px 0 0;
+}
+
+.rwNew:hover,
+.rwNew:focus-visible {
+  background: var(--brand);
+  color: var(--brand-ink);
+  outline: none;
+}
+
+.rwSelected {
+  background: var(--brand);
+  color: var(--brand-ink);
+}
+
+.details {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.details:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.summary {
+  cursor: pointer;
+  font-weight: 900;
+  font-size: 15px;
+}
+
+.detailsBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.listTitle {
+  font-weight: 900;
+  font-size: 14px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}

@@ -77,6 +77,7 @@ export interface KnownRecord {
 // A word met while reading, on its way to becoming a card.
 export interface NewCardRecord {
   id?: number;
+  type?: "word" | "grammar"; // absent on cards made before grammar existed: those are words
   front: string;
   level: number | null; // HSK level from the lexicon, null if not in the HSK list
   context: string; // the sentence it was met in

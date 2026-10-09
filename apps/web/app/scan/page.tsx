@@ -1,17 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import styles from "./scan.module.css";
 import { db, type NewCardRecord } from "@/lib/db";
 import { getAccessCode } from "@/lib/access-code";
 import { AccessNotice } from "../access-notice";
 import { Spinner } from "../spinner";
+import { WordPreview, type PreviewTarget } from "./word-preview";
 import { CardRequestError, requestCard } from "@/lib/card-client";
 import { resizeImage } from "@/lib/image-resize";
 import { loadKnownWords, markKnown } from "@/lib/known-db";
 import { buildAnkiTsv } from "@/lib/rewrite";
-import { scanText, type NewWord, type ScanResult } from "@/lib/scan";
+import { markText, scanText, type MarkedSentence, type NewWord, type ScanResult } from "@/lib/scan";
 
 const FLOOR_KEY = "hanzisave.levelFloor";
 const CONCURRENCY = 3;
@@ -30,6 +30,8 @@ export default function ScanPage() {
   // HSK 1-2 words are hidden by default; the deck's basics aren't all in Anki, and they are noise.
   const [levelFloor, setLevelFloor] = useState(2);
   const [result, setResult] = useState<ScanResult | null>(null);
+  const [marked, setMarked] = useState<MarkedSentence[] | null>(null);
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [cards, setCards] = useState<NewCardRecord[]>([]);
   // Which button started the read, so only that one shows the spinner.
@@ -105,6 +107,8 @@ export default function ScanPage() {
     setMessage("");
     const known = await loadKnownWords();
     setResult(scanText(text, { known, levelFloor }));
+    setMarked(markText(text, { known, levelFloor }));
+    setPreview(null);
     setSelected(new Set());
   };
 
@@ -112,6 +116,13 @@ export default function ScanPage() {
     const gone = new Set(surfaces);
     setResult((r) => (r ? { ...r, newWords: r.newWords.filter((w) => !gone.has(w.surface)) } : r));
     setSelected((prev) => new Set([...prev].filter((s) => !gone.has(s))));
+    setMarked((m) =>
+      m &&
+      m.map((sentence) => ({
+        ...sentence,
+        words: sentence.words.map((w) => (w.status === "new" && gone.has(w.surface) ? { ...w, status: "known" as const } : w)),
+      })),
+    );
   };
 
   const iKnow = async (surfaces: string[]) => {
@@ -150,6 +161,7 @@ export default function ScanPage() {
     setError("");
     const now = Date.now();
     const records: NewCardRecord[] = words.map((w) => ({
+      type: "word" as const,
       front: w.surface,
       level: w.level,
       context: w.sentence,
@@ -195,7 +207,7 @@ export default function ScanPage() {
   const exportable = cards.filter((c) => c.status === "approved" && !c.exportedAt && c.back);
 
   const exportCards = async () => {
-    const out = buildAnkiTsv(exportable.map((c) => ({ front: c.front, back: c.back!, type: "word" as const, tags: "" })));
+    const out = buildAnkiTsv(exportable.map((c) => ({ front: c.front, back: c.back!, type: c.type ?? ("word" as const), tags: "" })));
     const url = URL.createObjectURL(new Blob([out.tsv], { type: "text/plain;charset=utf-8" }));
     const a = document.createElement("a");
     a.href = url;
@@ -213,163 +225,10 @@ export default function ScanPage() {
   );
   const allSelected = !!result && result.newWords.length > 0 && selectedWords.length === result.newWords.length;
 
-  return (
-    <div className={styles.page}>
-      <div className={styles.header}>
-        <Link href="/" className={styles.back}>
-          ← Back
-        </Link>
-        <div className={styles.title}>Scan new words</div>
-      </div>
+  const wordCards = cards.filter((c) => (c.type ?? "word") === "word");
+  const grammarCards = cards.filter((c) => c.type === "grammar");
 
-      <div className={styles.panel}>
-        <textarea
-          className={styles.textarea}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Paste Chinese text here, or photograph a page…"
-        />
-        <div className={styles.row}>
-          <label className={styles.secondary}>
-            {ocrSource === "camera" ? (
-              <>
-                <Spinner />
-                Reading image…
-              </>
-            ) : (
-              "Take a photo"
-            )}
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              hidden
-              disabled={ocrBusy}
-              onChange={(e) => {
-                readImage(e.target.files?.[0], "camera");
-                e.target.value = "";
-              }}
-            />
-          </label>
-          <label className={styles.secondary}>
-            {ocrSource === "upload" ? (
-              <>
-                <Spinner />
-                Reading image…
-              </>
-            ) : (
-              "Upload an image"
-            )}
-            <input
-              type="file"
-              accept="image/*"
-              hidden
-              disabled={ocrBusy}
-              onChange={(e) => {
-                readImage(e.target.files?.[0], "upload");
-                e.target.value = "";
-              }}
-            />
-          </label>
-          <label className={styles.inline}>
-            Hide HSK words up to level
-            <select value={levelFloor} onChange={(e) => changeFloor(Number(e.target.value))}>
-              {[0, 1, 2, 3, 4, 5, 6].map((n) => (
-                <option key={n} value={n}>
-                  {n === 0 ? "none" : n}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button className={styles.primary} onClick={find} disabled={!text.trim() || ocrBusy}>
-            Find new words
-          </button>
-        </div>
-        {needsCode && <AccessNotice />}
-        {error && <div className={styles.error}>{error}</div>}
-      </div>
-
-      {result && (
-        <div className={styles.panel}>
-          <div className={styles.sectionTitle}>
-            {result.newWords.length} new {result.newWords.length === 1 ? "word" : "words"}
-            <span className={styles.hint}>
-              {" "}
-              · {result.knownWords} of {result.totalWords} words in the text are already known
-            </span>
-          </div>
-
-          {result.newWords.length > 0 && (
-            <div className={styles.row}>
-              <label className={styles.inline}>
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={() => setSelected(allSelected ? new Set() : new Set(result.newWords.map((w) => w.surface)))}
-                />
-                Select all
-              </label>
-              <button className={styles.primary} disabled={selectedWords.length === 0} onClick={() => makeCards(selectedWords)}>
-                Make cards ({selectedWords.length})
-              </button>
-              <button className={styles.secondary} disabled={selectedWords.length === 0} onClick={() => iKnow(selectedWords.map((w) => w.surface))}>
-                I know these ({selectedWords.length})
-              </button>
-            </div>
-          )}
-
-          {result.newWords.map((w) => (
-            <div key={w.surface} className={styles.word}>
-              <input
-                type="checkbox"
-                aria-label={`Select ${w.surface}`}
-                checked={selected.has(w.surface)}
-                onChange={() =>
-                  setSelected((prev) => {
-                    const next = new Set(prev);
-                    if (!next.delete(w.surface)) next.add(w.surface);
-                    return next;
-                  })
-                }
-              />
-              <span className={styles.hanzi}>{w.surface}</span>
-              <span className={styles.level} style={{ background: w.level ? LEVEL_COLOR[w.level] : "var(--oov)" }}>
-                {w.level ? `HSK ${w.level}` : "not in HSK"}
-              </span>
-              {w.count > 1 && <span className={styles.hint}>×{w.count}</span>}
-              <span className={styles.context}>{w.sentence}</span>
-              <button className={styles.secondary} onClick={() => makeCards([w])}>
-                Make card
-              </button>
-              <button className={styles.secondary} onClick={() => iKnow([w.surface])}>
-                I know it
-              </button>
-            </div>
-          ))}
-          {result.newWords.length === 0 && <div className={styles.hint}>Nothing new in this text.</div>}
-        </div>
-      )}
-
-      {(cards.length > 0 || generating > 0) && (
-        <div className={styles.panel}>
-          <div className={styles.sectionTitle}>
-            Your new cards
-            {generating > 0 && (
-              <span className={styles.hint}>
-                {" "}
-                · <Spinner />
-                generating {generating}…
-              </span>
-            )}
-          </div>
-          <div className={styles.row}>
-            <button className={styles.primary} disabled={exportable.length === 0} onClick={exportCards}>
-              Download {exportable.length} approved for Anki
-            </button>
-          </div>
-          {message && <div className={styles.hint}>{message}</div>}
-
-          {cards.map((c) => {
+  const renderCard = (c: NewCardRecord) => {
             const draft = editing && editing.id === c.id ? editing : null;
             return (
             <div key={c.id} className={styles.card}>
@@ -452,7 +311,232 @@ export default function ScanPage() {
               </div>
             </div>
             );
-          })}
+  };
+
+  return (
+    <div className={styles.page}>
+      <div className={styles.header}>
+        <div className={styles.title}>Scan new words</div>
+      </div>
+
+      <div className={styles.panel}>
+        <textarea
+          className={styles.textarea}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Paste Chinese text here, or photograph a page…"
+        />
+        <div className={styles.row}>
+          <label className={styles.secondary}>
+            {ocrSource === "camera" ? (
+              <>
+                <Spinner />
+                Reading image…
+              </>
+            ) : (
+              "Take a photo"
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              hidden
+              disabled={ocrBusy}
+              onChange={(e) => {
+                readImage(e.target.files?.[0], "camera");
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <label className={styles.secondary}>
+            {ocrSource === "upload" ? (
+              <>
+                <Spinner />
+                Reading image…
+              </>
+            ) : (
+              "Upload an image"
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              hidden
+              disabled={ocrBusy}
+              onChange={(e) => {
+                readImage(e.target.files?.[0], "upload");
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <label className={styles.inline}>
+            Hide HSK words up to level
+            <select value={levelFloor} onChange={(e) => changeFloor(Number(e.target.value))}>
+              {[0, 1, 2, 3, 4, 5, 6].map((n) => (
+                <option key={n} value={n}>
+                  {n === 0 ? "none" : n}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className={styles.primary} onClick={find} disabled={!text.trim() || ocrBusy}>
+            Analyze text
+          </button>
+        </div>
+        {needsCode && <AccessNotice />}
+        {error && <div className={styles.error}>{error}</div>}
+      </div>
+
+      {result && marked && (
+        <div className={styles.panel}>
+          <div className={styles.sectionTitle}>
+            {result.newWords.length} new {result.newWords.length === 1 ? "word" : "words"}
+            <span className={styles.hint}>
+              {" "}
+              · {result.knownWords} of {result.totalWords} words in the text are already known
+            </span>
+          </div>
+          <div className={styles.legend}>
+            <span className={styles.legendItem}>
+              <span className={`${styles.dot} ${styles.dotNew}`} />
+              New word, tap for a preview
+            </span>
+            <span className={styles.legendItem}>
+              <span className={`${styles.dot} ${styles.dotKnown}`} />
+              Known
+            </span>
+          </div>
+          {marked.map((sentence, i) => (
+            <p key={i} className={styles.reading}>
+              {sentence.words.map((w, j) =>
+                w.status === "new" ? (
+                  <button
+                    key={j}
+                    type="button"
+                    className={`${styles.rw} ${styles.rwNew} ${preview?.word === w.surface && preview.sentence === sentence.text ? styles.rwSelected : ""}`}
+                    onClick={() => setPreview({ word: w.surface, level: w.level, sentence: sentence.text })}
+                  >
+                    {w.surface}
+                  </button>
+                ) : (
+                  <span key={j} className={w.status === "known" ? styles.rwKnown : undefined}>
+                    {w.surface}
+                  </span>
+                ),
+              )}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {result && (
+        <div className={styles.panel}>
+          <details className={styles.details}>
+            <summary className={styles.summary}>New words ({result.newWords.length})</summary>
+            <div className={styles.detailsBody}>
+              {result.newWords.length > 0 && (
+                <div className={styles.row}>
+                  <label className={styles.inline}>
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={() => setSelected(allSelected ? new Set() : new Set(result.newWords.map((w) => w.surface)))}
+                    />
+                    Select all
+                  </label>
+                  <button className={styles.primary} disabled={selectedWords.length === 0} onClick={() => makeCards(selectedWords)}>
+                    Make cards ({selectedWords.length})
+                  </button>
+                  <button className={styles.secondary} disabled={selectedWords.length === 0} onClick={() => iKnow(selectedWords.map((w) => w.surface))}>
+                    I know these ({selectedWords.length})
+                  </button>
+                </div>
+              )}
+
+              {result.newWords.map((w) => (
+                <div key={w.surface} className={styles.word}>
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${w.surface}`}
+                    checked={selected.has(w.surface)}
+                    onChange={() =>
+                      setSelected((prev) => {
+                        const next = new Set(prev);
+                        if (!next.delete(w.surface)) next.add(w.surface);
+                        return next;
+                      })
+                    }
+                  />
+                  <span className={styles.hanzi}>{w.surface}</span>
+                  <span className={styles.level} style={{ background: w.level ? LEVEL_COLOR[w.level] : "var(--oov)" }}>
+                    {w.level ? `HSK ${w.level}` : "not in HSK"}
+                  </span>
+                  {w.count > 1 && <span className={styles.hint}>×{w.count}</span>}
+                  <span className={styles.context}>{w.sentence}</span>
+                  <button className={styles.secondary} onClick={() => makeCards([w])}>
+                    Make card
+                  </button>
+                  <button className={styles.secondary} onClick={() => iKnow([w.surface])}>
+                    I know it
+                  </button>
+                </div>
+              ))}
+              {result.newWords.length === 0 && <div className={styles.hint}>Nothing new in this text.</div>}
+            </div>
+          </details>
+
+          <details className={styles.details}>
+            <summary className={styles.summary}>New grammar (0)</summary>
+            <div className={styles.detailsBody}>
+              <div className={styles.hint}>Grammar points are not detected yet. They will be listed here, separately from words.</div>
+            </div>
+          </details>
+        </div>
+      )}
+
+      {preview && (
+        <WordPreview
+          key={`${preview.word}|${preview.sentence}`}
+          target={preview}
+          onMakeCard={() => {
+            const word = result?.newWords.find((w) => w.surface === preview.word);
+            setPreview(null);
+            if (word) makeCards([word]);
+          }}
+          onKnow={() => {
+            const surface = preview.word;
+            setPreview(null);
+            iKnow([surface]);
+          }}
+          onClose={() => setPreview(null)}
+        />
+      )}
+
+      {(cards.length > 0 || generating > 0) && (
+        <div className={styles.panel}>
+          <div className={styles.sectionTitle}>
+            Your new cards
+            {generating > 0 && (
+              <span className={styles.hint}>
+                {" "}
+                · <Spinner />
+                generating {generating}…
+              </span>
+            )}
+          </div>
+          <div className={styles.row}>
+            <button className={styles.primary} disabled={exportable.length === 0} onClick={exportCards}>
+              Download {exportable.length} approved for Anki
+            </button>
+          </div>
+          {message && <div className={styles.hint}>{message}</div>}
+
+          <div className={styles.listTitle}>Word cards ({wordCards.length})</div>
+          {wordCards.length === 0 && <div className={styles.hint}>No word cards yet.</div>}
+          {wordCards.map(renderCard)}
+
+          <div className={styles.listTitle}>Grammar cards ({grammarCards.length})</div>
+          {grammarCards.length === 0 && <div className={styles.hint}>No grammar cards yet.</div>}
+          {grammarCards.map(renderCard)}
         </div>
       )}
     </div>
