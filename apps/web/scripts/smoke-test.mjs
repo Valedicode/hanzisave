@@ -267,6 +267,10 @@ import { join } from "node:path";
   // a backup made before new_cards existed still restores, with an empty table
   const { new_cards: _omit, ...older } = tables;
   assert.deepEqual(parseBackup(JSON.stringify({ app: "hanzisave", version: 1, exportedAt: "x", tables: older })).tables.new_cards, []);
+  for (const status of ["in_format", "confirmed"]) {
+    const ok = { ...JSON.parse(text), tables: { ...tables, deck_units: [{ front: "a", oldBack: "b", status }] } };
+    assert.equal(parseBackup(JSON.stringify(ok)).tables.deck_units[0].status, status);
+  }
   assert.throws(() => parseBackup("not json"), /valid JSON/);
   assert.throws(() => parseBackup(JSON.stringify({ app: "other" })), /Not a HanziSave backup/);
   const badStatus = { ...JSON.parse(text), tables: { ...tables, deck_units: [{ front: "a", oldBack: "b", status: "weird" }] } };
@@ -404,6 +408,27 @@ import { join } from "node:path";
   const viaKnown = scanText("他买了网购。", { known: new Set(["网", "购"]), levelFloor: 0 });
   assert.ok(!names(viaKnown).includes("网购"), "pieces the learner already has make the compound known");
   assert.ok(names(scanText("他背得滚瓜烂熟。", { known: new Set(["滚", "瓜", "烂", "熟"]), levelFloor: 6 })).includes("滚瓜烂熟"), "four-character idioms are never waved through");
+}
+
+// mergeDeck(): an approved rewrite that comes back from Anki unchanged is not an edit and not stale.
+{
+  const rec = (id, front, oldBack, status, extra = {}) => ({
+    id, front, forms: [front], type: "word", format: "old", oldBack, tags: "", sourceRow: id, status, createdAt: 0, ...extra,
+  });
+  const unit = (front, oldBack) => ({ front, forms: [front], type: "word", format: "current", oldBack, tags: "", sourceRow: 1 });
+  const existing = [
+    rec(1, "A", "old a", "approved", { newBack: "NEW A" }),
+    rec(2, "B", "old b", "approved", { newBack: "NEW B" }),
+  ];
+  const trailing = "NEW A" + String.fromCharCode(10); // exports can add a trailing newline
+  const r = mergeDeck(existing, [unit("A", trailing), unit("B", "NEW B edited in Anki")]);
+  const byId = Object.fromEntries(r.update.map((u) => [u.id, u.changes]));
+  assert.deepEqual(r.importedFronts, ["A"]);
+  assert.equal("stale" in byId[1], false);
+  assert.equal(byId[1].oldBack, trailing);
+  assert.equal(byId[1].format, "current");
+  assert.deepEqual(r.staleFronts, ["B"]); // a genuine edit after the rewrite still flags it
+  assert.equal(r.unchanged, 1);
 }
 
 console.log("smoke-test: all checks passed");

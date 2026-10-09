@@ -15,6 +15,7 @@ export interface MergeResult {
   addedFronts: string[];
   changedFronts: string[]; // source changed in Anki
   staleFronts: string[]; // ...and already rewritten, so the rewrite may be out of date
+  importedFronts: string[]; // the user's own approved rewrite came back from Anki unchanged
   missingFronts: string[]; // no longer in the export
   unchanged: number;
 }
@@ -101,6 +102,7 @@ export function mergeDeck(existing: DeckUnitRecord[], incoming: DeckUnit[]): Mer
     addedFronts: [],
     changedFronts: [],
     staleFronts: [],
+    importedFronts: [],
     missingFronts: [],
     unchanged: 0,
   };
@@ -108,7 +110,17 @@ export function mergeDeck(existing: DeckUnitRecord[], incoming: DeckUnit[]): Mer
 
   for (const [old, unit] of pairs) {
     const changes: Partial<DeckUnitRecord> = {};
-    const sourceChanged = old.oldBack !== unit.oldBack || old.type !== unit.type || old.front !== unit.front;
+    // After the user imports an approved rewrite into Anki, the next export carries that
+    // same text as the card's Back. That is the rewrite landing, not an edit in Anki.
+    const backChanged = old.oldBack !== unit.oldBack;
+    const rewriteLanded = backChanged && old.newBack !== undefined && unit.oldBack.trim() === old.newBack.trim();
+    if (rewriteLanded) {
+      changes.oldBack = unit.oldBack;
+      changes.format = unit.format;
+      result.importedFronts.push(unit.front);
+    }
+    const sourceChanged =
+      (backChanged && !rewriteLanded) || old.type !== unit.type || old.front !== unit.front;
     if (sourceChanged) {
       changes.front = unit.front;
       changes.oldBack = unit.oldBack;
