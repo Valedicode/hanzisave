@@ -452,6 +452,7 @@ import { join } from "node:path";
   // a phrase the learner already has must still be split
   assert.deepEqual(splitComponents("注册银行卡", new Set(["注册银行卡"])), ["注册", "银行卡"]);
   assert.deepEqual(splitComponents("银行", new Set()), [], "a single word is not a phrase");
+  assert.deepEqual(splitComponents("绑定银行卡", new Set()), ["绑定", "银行卡"], "characters the segmenter split are joined back");
   assert.ok(splitComponents("快递员", new Set()).every((p) => p.length >= 2), "single characters are dropped");
 
   const plan = planComponentCards(["注册银行卡", "注册账号"], new Set(["银行卡"]));

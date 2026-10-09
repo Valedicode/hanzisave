@@ -5,10 +5,13 @@ import { segment } from "./segment";
 
 const HAN = /^\p{Script=Han}+$/u;
 
-// The parts of a phrase worth a card. Single characters are skipped: they are
-// usually particles or bound morphemes (员, 了), not words to learn by themselves.
-// The phrase itself is ignored when it appears in `known`, otherwise a phrase the
-// learner already has would be kept whole and never split.
+const MAX_RUN = 3;
+
+// The parts of a phrase worth a card. A lone character is skipped: it is usually a
+// particle or bound morpheme (员, 了). But the segmenter splits a word it doesn't know
+// (绑定) into single characters, so a short run of them side by side is joined back
+// into one part. The phrase itself is ignored when it appears in `known`, otherwise a
+// phrase the learner already has would be kept whole and never split.
 export function splitComponents(phrase: string, known: ReadonlySet<string>): string[] {
   const extra = new Set(known);
   extra.delete(phrase);
@@ -16,7 +19,23 @@ export function splitComponents(phrase: string, known: ReadonlySet<string>): str
     .map((w) => w.surface)
     .filter((s) => HAN.test(s));
   if (words.length < 2) return []; // a single word, not a phrase
-  return [...new Set(words.filter((s) => s.length >= 2 && s !== phrase))];
+
+  const parts: string[] = [];
+  let run = "";
+  const flushRun = () => {
+    if (run.length >= 2 && run.length <= MAX_RUN) parts.push(run);
+    run = "";
+  };
+  for (const word of words) {
+    if (word.length === 1) {
+      run += word;
+      continue;
+    }
+    flushRun();
+    parts.push(word);
+  }
+  flushRun();
+  return [...new Set(parts.filter((s) => s !== phrase))];
 }
 
 export interface ComponentPlan {
