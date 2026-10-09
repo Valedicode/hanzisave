@@ -16,6 +16,7 @@ import { generateValidCard } from "../lib/card-service.ts";
 import { buildAnkiTsv, splitChanged } from "../lib/rewrite.ts";
 import { mergeDeck } from "../lib/merge-deck.ts";
 import { scanText } from "../lib/scan.ts";
+import { estimateRemainingMs, formatEta } from "../lib/eta.ts";
 import { parseBackup, serializeBackup } from "../lib/backup.ts";
 import { readApkg } from "../lib/apkg.ts";
 import { DatabaseSync } from "node:sqlite";
@@ -429,6 +430,17 @@ import { join } from "node:path";
   assert.equal(byId[1].format, "current");
   assert.deepEqual(r.staleFronts, ["B"]); // a genuine edit after the rewrite still flags it
   assert.equal(r.unchanged, 1);
+}
+
+// estimateRemainingMs()/formatEta(): the estimate follows the pace so far and reads naturally.
+{
+  assert.equal(estimateRemainingMs(0, 5000, 0, 10), null, "no estimate before the first completion");
+  assert.equal(estimateRemainingMs(0, 5000, 10, 10), null, "no estimate once finished");
+  assert.equal(estimateRemainingMs(0, 10_000, 5, 15), 20_000); // 2 s per card, 10 cards left
+  assert.equal(formatEta(400), "~1 s left");
+  assert.equal(formatEta(45_000), "~45 s left");
+  assert.equal(formatEta(4 * 60_000), "~4 min left");
+  assert.equal(formatEta(75 * 60_000), "~1 h 15 min left");
 }
 
 console.log("smoke-test: all checks passed");
