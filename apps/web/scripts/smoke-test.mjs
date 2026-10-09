@@ -13,6 +13,8 @@ import { hasAccess } from "../lib/access.ts";
 import { checkCardFormat, checkPatternExamples } from "../lib/card-format.ts";
 import { parseReasoning } from "../lib/llm/reasoning.ts";
 import { generateValidCard } from "../lib/card-service.ts";
+import { parseGloss } from "../lib/gloss-prompt.ts";
+import { createOpenAiProvider } from "../lib/llm/openai.ts";
 import { buildAnkiTsv, splitChanged, toHtmlField } from "../lib/rewrite.ts";
 import { mergeDeck } from "../lib/merge-deck.ts";
 import { scanText } from "../lib/scan.ts";
@@ -558,6 +560,27 @@ import { join } from "node:path";
 
   // indentation survives the Anki export
   assert.equal(toHtmlField("- a" + NL + "    b"), "- a<br>&nbsp;&nbsp;&nbsp;&nbsp;b");
+}
+
+// Gloss: plain JSON from the model is parsed and checked; prose around it is tolerated; junk is rejected.
+{
+  const json = '{"pinyin":"diànnǎo","gloss":"computer","example":"我的电脑坏了。","examplePinyin":"Wǒ de diànnǎo huài le.","exampleTranslation":"My computer broke."}';
+  assert.equal(parseGloss(json).gloss, "computer");
+  assert.equal(parseGloss("Here you go:\n```json\n" + json + "\n```").pinyin, "diànnǎo", "a code fence and prose around the JSON are fine");
+  assert.equal(parseGloss('{"pinyin":"a","gloss":"b","example":"c"}').examplePinyin, undefined, "older replies without the extra fields still parse");
+  assert.equal(parseGloss('{"pinyin":"a"}'), null, "missing fields");
+  assert.equal(parseGloss("sorry, I cannot"), null);
+
+  // the provider retries once, then reports an unusable gloss; the model and reasoning come from the card settings
+  const calls = [];
+  const fake = (...replies) => ({ chat: { completions: { create: async (p) => { calls.push(p); return { choices: [{ message: { content: replies[Math.min(calls.length - 1, replies.length - 1)] } }] }; } } } });
+  const ok = await createOpenAiProvider(fake("not json", json), "qwen/test", undefined).generateGloss({ word: "电脑", sentence: "我的电脑坏了。" });
+  assert.equal(ok.gloss, "computer");
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].model, "qwen/test");
+  calls.length = 0;
+  await assert.rejects(createOpenAiProvider(fake("nope"), "qwen/test", undefined).generateGloss({ word: "电脑", sentence: "s" }), /unusable gloss/);
+  assert.equal(calls.length, 2);
 }
 
 console.log("smoke-test: all checks passed");

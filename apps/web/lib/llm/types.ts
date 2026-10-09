@@ -1,6 +1,8 @@
 // Provider-agnostic contract for the LLM calls the app makes. Route handlers
 // depend on this, never on a vendor SDK, so switching provider touches one file.
 
+import type { Gloss, GlossRequest } from "../gloss-schema";
+
 export type CardType = "word" | "grammar";
 
 export interface CardRequest {
@@ -21,6 +23,8 @@ export interface LlmProvider {
   generateCard(req: CardRequest, spec: string): Promise<string>;
   // Returns the Chinese text found in a photo or screenshot ("" if there is none).
   extractText(image: ImageInput): Promise<string>;
+  // A short preview of a word as used in a sentence: pinyin, meaning and a new example.
+  generateGloss(req: GlossRequest): Promise<Gloss>;
 }
 
 // Errors a provider reports in vendor-neutral form; `status` is an HTTP status

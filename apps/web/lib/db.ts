@@ -35,6 +35,8 @@ export interface GlossCacheRecord {
   pinyin: string;
   gloss: string;
   example: string;
+  examplePinyin?: string;
+  exampleTranslation?: string;
   createdAt: number;
 }
 
