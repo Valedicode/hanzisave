@@ -393,4 +393,17 @@ import { join } from "node:path";
   assert.ok(!names(scanText("hello 123 。", { known: new Set() })).length, "non-Han text yields no words");
 }
 
+// scanText(): tokens that are just easy known pieces joined are not new words; idioms still are.
+{
+  const names = (r) => r.newWords.map((w) => w.surface);
+  const text = "他三天后到了。叶公好龙是个故事。";
+  assert.ok(names(scanText(text, { known: new Set(), levelFloor: 0 })).includes("三天"), "without a floor, 三天 is still reported");
+  const floored = scanText(text, { known: new Set(), levelFloor: 2 });
+  assert.ok(!names(floored).includes("三天"), "三 + 天 are both easy, so 三天 is not new");
+  assert.ok(!names(floored).includes("到了"));
+  const viaKnown = scanText("他买了网购。", { known: new Set(["网", "购"]), levelFloor: 0 });
+  assert.ok(!names(viaKnown).includes("网购"), "pieces the learner already has make the compound known");
+  assert.ok(names(scanText("他背得滚瓜烂熟。", { known: new Set(["滚", "瓜", "烂", "熟"]), levelFloor: 6 })).includes("滚瓜烂熟"), "four-character idioms are never waved through");
+}
+
 console.log("smoke-test: all checks passed");
