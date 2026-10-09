@@ -54,6 +54,7 @@ export function addPatternPinyin(back: string, toPinyin: HanToPinyin): string {
         return line;
       }
       if (inPatterns) {
+        if (/^\s+\S/.test(line)) return line; // an example, its pinyin or translation under a pattern
         if (BULLET.test(line)) return withPinyinLine(line, toPinyin);
         inPatterns = false; // a blank line or the next label ends the section
       }

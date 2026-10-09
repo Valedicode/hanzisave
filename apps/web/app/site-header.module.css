@@ -1,0 +1,54 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 12px 32px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: var(--brand);
+  color: var(--brand-ink);
+  font-family: "Noto Sans SC", sans-serif;
+  font-weight: 700;
+  font-size: 20px;
+  display: grid;
+  place-items: center;
+}
+
+.brandName {
+  font-weight: 900;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .inner {
+    padding: 10px 16px;
+  }
+}

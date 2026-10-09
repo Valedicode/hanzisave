@@ -21,7 +21,9 @@ const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
 
 // Plain card text -> Anki HTML field (the export has `#html:true`).
 export function toHtmlField(text: string): string {
-  return escapeHtml(text).replace(/\n/g, "<br>");
+  return escapeHtml(text)
+    .replace(/^ +/gm, (spaces) => "&nbsp;".repeat(spaces.length))
+    .replace(/\n/g, "<br>");
 }
 
 // A TSV field is quoted when it holds a tab, newline or quote; quotes double.

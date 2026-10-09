@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { AccessCodeForm } from "./access-code-form";
-import { NavMenu } from "./nav-menu";
 import styles from "./landing.module.css";
 
 const HSK_LEGEND = [
@@ -33,13 +32,6 @@ const NEXT_UP = ["Grammar points", "Review inside the app", "Install on your pho
 export default function Landing() {
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <Link href="/" className={styles.brand}>
-          <span className={styles.logo}>汉</span>
-          <span className={styles.brandName}>HanziSave</span>
-        </Link>
-        <NavMenu />
-      </header>
 
       <main>
         <section className={styles.hero}>

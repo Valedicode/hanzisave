@@ -1,4 +1,4 @@
-import { checkCardFormat } from "./card-format";
+import { checkCardFormat, checkPatternExamples } from "./card-format";
 import type { CardRequest, LlmProvider } from "./llm/types";
 
 export type CardResult =
@@ -18,6 +18,7 @@ export async function generateValidCard(
   for (let i = 0; i < attempts; i++) {
     back = await provider.generateCard(req, spec);
     problems = checkCardFormat(back, req.type).problems;
+    if (req.type === "word") problems = [...problems, ...checkPatternExamples(back)];
     if (problems.length === 0) return { ok: true, back };
   }
   return { ok: false, back, problems };

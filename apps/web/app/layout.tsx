@@ -3,7 +3,7 @@ import "./globals.css";
 import { PersistStorage } from "./persist-storage";
 import { RegisterServiceWorker } from "./register-sw";
 import { THEME_KEY } from "@/lib/theme";
-import { ThemeToggle } from "./theme-toggle";
+import { SiteHeader } from "./site-header";
 
 // Runs before the page paints so a saved light/dark choice never flashes the other theme.
 const APPLY_THEME = `try{var t=localStorage.getItem("${THEME_KEY}");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`;
@@ -34,8 +34,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         />
       </head>
       <body>
+        <SiteHeader />
         {children}
-        <ThemeToggle />
         <PersistStorage />
         <RegisterServiceWorker />
       </body>

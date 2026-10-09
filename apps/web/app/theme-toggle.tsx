@@ -48,7 +48,7 @@ export function ThemeToggle() {
       suppressHydrationWarning
     >
       <span aria-hidden="true" suppressHydrationWarning>
-        {theme === "dark" ? "☀" : "☾"}
+        {theme === "dark" ? "☾" : "☀"}
       </span>
     </button>
   );
