@@ -2,7 +2,7 @@
 
 Turn the Chinese you are actually reading into Anki flashcards, and keep your existing deck in good shape.
 
-HanziSave is a personal project. Paste a text or photograph a page, see every word coloured by HSK level, pick the words that are new to you, and generate cards in a fixed format. Cards stay in your browser until you export them to Anki.
+HanziSave is a personal project that was created to help me learn chinese more efficiently. It leverages my current Claude and Anki set up by combining both benefits and identifying new cards when trying to add new words (be it manually or by scanning an image). Paste a text or photograph a page, see every word coloured by HSK level, pick the words that are new to you, and generate cards in a fixed format. Cards stay in your browser until you export them to Anki.
 
 ## What it does
 
