@@ -51,7 +51,9 @@ export interface DeckUnitRecord {
   splitFrom?: string;
   ankiNoteId?: number; // Anki note id when imported from an .apkg
   ankiGuid?: string;
-  status: "pending" | "generated" | "approved" | "skipped" | "failed";
+  // "in_format": the existing Back already follows the card spec, so it was not regenerated
+  // and waits for a human check; "confirmed": the human agreed, nothing to do.
+  status: "pending" | "generated" | "approved" | "skipped" | "failed" | "in_format" | "confirmed";
   newBack?: string; // rewritten Back in the card spec format
   changed?: string; // factual correction the model reported, for review
   problems?: string[]; // why generation failed

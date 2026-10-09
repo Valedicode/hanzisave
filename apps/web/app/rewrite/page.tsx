@@ -57,7 +57,16 @@ export default function RewritePage() {
   };
 
   const counts = useMemo(() => {
-    const c: Record<Filter, number> = { pending: 0, generated: 0, approved: 0, failed: 0, skipped: 0, all: units.length };
+    const c: Record<Filter, number> = {
+      pending: 0,
+      generated: 0,
+      approved: 0,
+      failed: 0,
+      skipped: 0,
+      in_format: 0,
+      confirmed: 0,
+      all: units.length,
+    };
     for (const u of units) c[u.status]++;
     return c;
   }, [units]);
