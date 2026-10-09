@@ -230,3 +230,14 @@
   color: var(--ink2);
   cursor: pointer;
 }
+
+.search {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
