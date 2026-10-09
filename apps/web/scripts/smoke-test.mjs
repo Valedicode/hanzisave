@@ -10,6 +10,7 @@ import { planSplit } from "../lib/split-front.ts";
 import { buildDeckPlan } from "../lib/deck-plan.ts";
 import { buildCardPrompt, cleanCardOutput } from "../lib/card-prompt.ts";
 import { hasAccess } from "../lib/access.ts";
+import { checkCardFormat } from "../lib/card-format.ts";
 
 // Longest-match re-merge: ICU splits 电脑 into 电+脑, lexicon has 电脑 (HSK1).
 {
@@ -136,6 +137,22 @@ import { hasAccess } from "../lib/access.ts";
   assert.equal(hasAccess(req("secreX"), "secret"), false);
   assert.equal(hasAccess(req("secret!"), "secret"), false); // different length
   assert.equal(hasAccess(req(), "secret"), false);
+}
+
+// checkCardFormat(): a complete card passes; missing labels, fences and markdown are reported.
+{
+  const NL = String.fromCharCode(10);
+  const word = [
+    "Pinyin: dǎ chē", "Jyutping: daa2 ce1", "Used in Cantonese: No", "Part of speech: Verb",
+    "Register: Informal", "Translation: to take a taxi", "Patterns:", "- 打车 + 去 + 地点 (take a taxi to a place)",
+    "Example: 我们打车去机场吧。", "Wǒmen dǎchē qù jīchǎng ba.", "Let's take a taxi to the airport.",
+  ].join(NL);
+  assert.deepEqual(checkCardFormat(word, "word"), { ok: true, problems: [] });
+  const broken = checkCardFormat(word.replace("Jyutping: daa2 ce1" + NL, ""), "word");
+  assert.deepEqual(broken.problems, ["missing Jyutping:"]);
+  assert.ok(checkCardFormat("**Pinyin:** x", "word").problems.includes("contains markdown"));
+  const grammar = checkCardFormat(word, "grammar");
+  assert.ok(grammar.problems.includes("missing Pattern:") && grammar.problems.includes("grammar card needs two Example lines"));
 }
 
 console.log("smoke-test: all checks passed");
