@@ -15,6 +15,7 @@ import { parseReasoning } from "../lib/llm/reasoning.ts";
 import { generateValidCard } from "../lib/card-service.ts";
 import { buildAnkiTsv, splitChanged } from "../lib/rewrite.ts";
 import { mergeDeck } from "../lib/merge-deck.ts";
+import { parseBackup, serializeBackup } from "../lib/backup.ts";
 
 // Longest-match re-merge: ICU splits 电脑 into 电+脑, lexicon has 电脑 (HSK1).
 {
@@ -239,6 +240,25 @@ import { mergeDeck } from "../lib/merge-deck.ts";
   assert.equal(byId[4].missing, true);
   assert.equal(byId[5].missing, false);
   assert.equal(1 in byId, false); // untouched
+}
+
+// serializeBackup()/parseBackup(): round-trips, and rejects files that aren't a valid backup.
+{
+  const tables = {
+    deck_units: [{ id: 1, front: "国土", oldBack: "x", status: "approved", newBack: "y", extra: [1] }],
+    known: [{ key: "word:国土", item: "国土", type: "word" }],
+    texts: [],
+    cards: [],
+    reviews: [],
+  };
+  const text = serializeBackup(tables, new Date("2026-10-09T00:00:00Z"));
+  const back = parseBackup(text);
+  assert.deepEqual(back.tables, tables);
+  assert.equal(back.exportedAt, "2026-10-09T00:00:00.000Z");
+  assert.throws(() => parseBackup("not json"), /valid JSON/);
+  assert.throws(() => parseBackup(JSON.stringify({ app: "other" })), /Not a HanziSave backup/);
+  const badStatus = { ...JSON.parse(text), tables: { ...tables, deck_units: [{ front: "a", oldBack: "b", status: "weird" }] } };
+  assert.throws(() => parseBackup(JSON.stringify(badStatus)), /deck_units/);
 }
 
 console.log("smoke-test: all checks passed");
