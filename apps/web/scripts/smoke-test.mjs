@@ -15,6 +15,7 @@ import { parseReasoning } from "../lib/llm/reasoning.ts";
 import { generateValidCard } from "../lib/card-service.ts";
 import { buildAnkiTsv, splitChanged } from "../lib/rewrite.ts";
 import { mergeDeck } from "../lib/merge-deck.ts";
+import { scanText } from "../lib/scan.ts";
 import { parseBackup, serializeBackup } from "../lib/backup.ts";
 import { readApkg } from "../lib/apkg.ts";
 import { DatabaseSync } from "node:sqlite";
@@ -362,6 +363,30 @@ import { join } from "node:path";
   assert.equal(withExtra.find((w) => w.surface === "叶公好龙").level, null);
   const dianNao = segment("电脑很贵", { extra: new Set(["电脑"]) }).find((w) => w.surface === "电脑");
   assert.equal(dianNao.level, 1); // lexicon level is kept for words that are also in the lexicon
+}
+
+// scanText(): known words and words at or below the level floor are skipped; counts and context are kept.
+{
+  const text = "叶公好龙是一个故事。电脑很贵，苹果也很贵。我喜欢苹果。";
+  const names = (r) => r.newWords.map((w) => w.surface);
+
+  const none = scanText(text, { known: new Set() });
+  assert.ok(names(none).includes("电脑"));
+  assert.equal(none.newWords.find((w) => w.surface === "电脑").level, 1);
+
+  const apple = none.newWords.find((w) => w.surface === "苹果");
+  assert.equal(apple.count, 2);
+  assert.equal(apple.sentence, "电脑很贵，苹果也很贵。"); // first sentence it appears in
+
+  const withKnown = scanText(text, { known: new Set(["叶公好龙", "电脑"]) });
+  assert.ok(!names(withKnown).includes("叶公好龙"), "the learner's own word is known, even if the lexicon lacks it");
+  assert.ok(!names(withKnown).includes("电脑"));
+  assert.ok(withKnown.knownWords > none.knownWords);
+
+  const floored = scanText(text, { known: new Set(), levelFloor: 1 });
+  assert.ok(!names(floored).includes("电脑"), "HSK 1 words are hidden with a floor of 1");
+  assert.ok(names(floored).length > 0, "words above the floor, or outside the HSK list, remain");
+  assert.ok(!names(scanText("hello 123 。", { known: new Set() })).length, "non-Han text yields no words");
 }
 
 console.log("smoke-test: all checks passed");
