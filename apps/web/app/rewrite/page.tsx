@@ -7,7 +7,9 @@ import { db, type DeckUnitRecord } from "@/lib/db";
 import { CardRequestError, requestCard } from "@/lib/card-client";
 import { getAccessCode, setAccessCode as storeAccessCode } from "@/lib/access-code";
 import { checkCardFormat } from "@/lib/card-format";
+import { planComponentCards } from "@/lib/components";
 import { etaTracker, formatEta } from "@/lib/eta";
+import { loadKnownWords } from "@/lib/known-db";
 import { buildAnkiTsv, splitChanged } from "@/lib/rewrite";
 
 type Status = DeckUnitRecord["status"];
@@ -111,7 +113,15 @@ export default function RewritePage() {
 
   const generateOne = async (u: DeckUnitRecord) => {
     try {
-      const raw = await requestCard({ item: u.front, type: u.type, oldBack: u.oldBack }, accessCode || undefined);
+      const raw = await requestCard(
+        {
+          item: u.front,
+          type: u.type,
+          oldBack: u.oldBack || undefined,
+          context: u.componentOf ? `part of the phrase ${u.componentOf}` : undefined,
+        },
+        accessCode || undefined,
+      );
       const { back, changed } = splitChanged(raw);
       await patch(u.id!, { status: "generated", newBack: back, changed, problems: undefined, stale: false });
     } catch (e) {
@@ -181,6 +191,45 @@ export default function RewritePage() {
     const pending = selectedToGenerate.filter((u) => u.status === "pending");
     const forced = selectedToGenerate.filter((u) => u.status !== "pending");
     await runQueue([...(await sortOutFormatted(pending)), ...forced]);
+    setSelected(new Set());
+  };
+
+  // Fixed expressions (注册银行卡) get a card for each part (注册, 银行卡). A part is only
+  // added if it isn't already a card, in the deck, known, or queued from a scan.
+  const addComponentCards = async (cards: DeckUnitRecord[]) => {
+    const phrases = cards.filter((c) => c.type === "word").map((c) => c.front);
+    if (phrases.length === 0) return;
+    const existing = new Set(await loadKnownWords());
+    for (const u of units) {
+      existing.add(u.front);
+      for (const f of u.forms) existing.add(f);
+    }
+    const plan = planComponentCards(phrases, existing);
+    if (plan.add.length > 0) {
+      const now = Date.now();
+      const records: DeckUnitRecord[] = plan.add.map((a) => ({
+        front: a.front,
+        forms: [a.front],
+        type: "word",
+        format: "old",
+        oldBack: "",
+        tags: "",
+        sourceRow: 0,
+        componentOf: a.componentOf,
+        status: "pending",
+        createdAt: now,
+      }));
+      const ids = await db.deck_units.bulkAdd(records, { allKeys: true });
+      setUnits((prev) => [...prev, ...records.map((r, i) => ({ ...r, id: ids[i] as number }))]);
+    }
+    setNotice(
+      plan.add.length > 0
+        ? `Added ${plan.add.length} component cards: ${plan.add.map((a) => a.front).join(", ")}. ` +
+            `${plan.skipped.length} parts already existed.`
+        : plan.skipped.length > 0
+          ? `Nothing to add: all ${plan.skipped.length} parts already exist (${plan.skipped.join(", ")}).`
+          : "These phrases did not split into smaller words.",
+    );
     setSelected(new Set());
   };
 
@@ -352,11 +401,16 @@ export default function RewritePage() {
           >
             Approve selected ({selectedToApprove.length})
           </button>
-          {approvableAll.length > 0 && (
-            <button className={styles.secondary} onClick={() => approveIds(approvableAll)}>
-              Approve all {approvableAll.length}
-            </button>
-          )}
+          <button
+            className={styles.secondary}
+            disabled={selectedCards.every((c) => c.type !== "word")}
+            onClick={() => addComponentCards(selectedCards)}
+          >
+            Add component cards
+          </button>
+          <button className={styles.secondary} disabled={approvableAll.length === 0} onClick={() => approveIds(approvableAll)}>
+            Approve all {approvableAll.length}
+          </button>
           {toConfirmAll.length > 0 && (
             <>
               <button
@@ -397,6 +451,7 @@ export default function RewritePage() {
             <span className={styles.badge}>{u.type}</span>
             <span className={styles.badge}>was {u.format}</span>
             {u.splitFrom && <span className={styles.badge}>split from {u.splitFrom}</span>}
+            {u.componentOf && <span className={styles.badge}>part of {u.componentOf}</span>}
             {duplicateFronts.has(u.front) && <span className={styles.warn}>duplicate front</span>}
             {u.stale && <span className={styles.warn}>source changed in Anki after this rewrite</span>}
             {u.missing && <span className={styles.warn}>no longer in Anki</span>}
@@ -405,7 +460,7 @@ export default function RewritePage() {
           <div className={styles.cols}>
             <div>
               <div className={styles.label}>Old</div>
-              <pre className={styles.pre}>{u.oldBack}</pre>
+              <pre className={styles.pre}>{u.oldBack || "New card: there is no existing text."}</pre>
             </div>
             <div>
               <div className={styles.label}>New</div>
@@ -466,6 +521,11 @@ export default function RewritePage() {
                 {u.newBack && (
                   <button className={styles.secondary} onClick={() => setEditing({ id: u.id!, text: u.newBack! })}>
                     Edit
+                  </button>
+                )}
+                {u.type === "word" && !u.componentOf && (
+                  <button className={styles.secondary} onClick={() => addComponentCards([u])}>
+                    Add components
                   </button>
                 )}
                 <button className={styles.secondary} onClick={() => regenerate(u)} disabled={!!running}>
