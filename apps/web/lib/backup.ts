@@ -23,13 +23,14 @@ export const BackupSchema = z.object({
     texts: rows,
     cards: rows,
     reviews: rows,
+    new_cards: rows.default([]), // absent in backups made before scanning existed
   }),
 });
 
 export type Backup = z.infer<typeof BackupSchema>;
 export type BackupTables = Backup["tables"];
 
-export const BACKUP_TABLES = ["deck_units", "known", "texts", "cards", "reviews"] as const;
+export const BACKUP_TABLES = ["deck_units", "known", "texts", "cards", "reviews", "new_cards"] as const;
 
 export function serializeBackup(tables: BackupTables, now: Date = new Date()): string {
   const backup: Backup = { app: "hanzisave", version: 1, exportedAt: now.toISOString(), tables };

@@ -258,11 +258,15 @@ import { join } from "node:path";
     texts: [],
     cards: [],
     reviews: [],
+    new_cards: [{ id: 1, front: "苹果", status: "approved" }],
   };
   const text = serializeBackup(tables, new Date("2026-10-09T00:00:00Z"));
   const back = parseBackup(text);
   assert.deepEqual(back.tables, tables);
   assert.equal(back.exportedAt, "2026-10-09T00:00:00.000Z");
+  // a backup made before new_cards existed still restores, with an empty table
+  const { new_cards: _omit, ...older } = tables;
+  assert.deepEqual(parseBackup(JSON.stringify({ app: "hanzisave", version: 1, exportedAt: "x", tables: older })).tables.new_cards, []);
   assert.throws(() => parseBackup("not json"), /valid JSON/);
   assert.throws(() => parseBackup(JSON.stringify({ app: "other" })), /Not a HanziSave backup/);
   const badStatus = { ...JSON.parse(text), tables: { ...tables, deck_units: [{ front: "a", oldBack: "b", status: "weird" }] } };
