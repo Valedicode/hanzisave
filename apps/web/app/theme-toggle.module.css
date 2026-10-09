@@ -1,14 +1,14 @@
 .toggle {
   position: fixed;
+  top: 12px;
   right: 16px;
-  bottom: 16px;
   z-index: 50;
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--panel);
   color: var(--ink2);
   font-size: 18px;

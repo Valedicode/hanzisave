@@ -11,7 +11,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 32px;
+  padding: 18px 76px 18px 32px;
   max-width: 1080px;
   width: 100%;
   margin: 0 auto;
@@ -323,7 +323,7 @@
 
 @media (max-width: 720px) {
   .header {
-    padding: 14px 20px;
+    padding: 14px 68px 14px 20px;
   }
 
   .nav a:nth-child(n + 3) {
