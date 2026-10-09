@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import styles from "./scan.module.css";
 import { db, type NewCardRecord } from "@/lib/db";
 import { getAccessCode } from "@/lib/access-code";
+import { AccessNotice } from "../access-notice";
 import { CardRequestError, requestCard } from "@/lib/card-client";
 import { resizeImage } from "@/lib/image-resize";
 import { loadKnownWords, markKnown } from "@/lib/known-db";
@@ -33,6 +34,7 @@ export default function ScanPage() {
   const [ocrBusy, setOcrBusy] = useState(false);
   const [generating, setGenerating] = useState(0);
   const [error, setError] = useState("");
+  const [needsCode, setNeedsCode] = useState(false);
   const [editing, setEditing] = useState<{ id: number; text: string } | null>(null);
   const [message, setMessage] = useState("");
 
@@ -69,6 +71,7 @@ export default function ScanPage() {
   const readImage = async (file: File | undefined) => {
     if (!file) return;
     setError("");
+    setNeedsCode(false);
     setOcrBusy(true);
     try {
       const blob = await resizeImage(file);
@@ -79,6 +82,10 @@ export default function ScanPage() {
         body: blob,
       });
       const body = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        setNeedsCode(true);
+        return;
+      }
       if (!res.ok) throw new Error(body.error ?? `could not read the image (${res.status})`);
       if (!body.text) throw new Error("No Chinese text found in that image.");
       setText((prev) => (prev.trim() ? `${prev.trim()}\n${body.text}` : body.text));
@@ -118,7 +125,8 @@ export default function ScanPage() {
     } catch (e) {
       const err = e instanceof CardRequestError ? e : new CardRequestError(String(e), 0);
       await patchCard(card.id!, { status: "failed", problems: err.problems ?? [err.message] });
-      if (err.fatal) setError(err.message);
+      if (err.status === 401) setNeedsCode(true);
+      else if (err.fatal) setError(err.message);
     }
   };
 
@@ -235,6 +243,7 @@ export default function ScanPage() {
             Find new words
           </button>
         </div>
+        {needsCode && <AccessNotice />}
         {error && <div className={styles.error}>{error}</div>}
       </div>
 

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import styles from "./import.module.css";
 import { notesFromApkg, parseAnkiExport, summarize, type ParsedDeck } from "@/lib/anki-import";
 import { getAccessCode } from "@/lib/access-code";
+import { AccessNotice } from "../access-notice";
 import { buildDeckPlan, type CardType } from "@/lib/deck-plan";
 import type { Hsk30Index } from "@/lib/split-front";
 import { db, type DeckUnitRecord } from "@/lib/db";
@@ -17,6 +18,7 @@ export default function ImportPage() {
   const [deck, setDeck] = useState<ParsedDeck | null>(null);
   const [fileName, setFileName] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [needsCode, setNeedsCode] = useState(false);
   const [index, setIndex] = useState<Hsk30Index | null>(null);
   const [indexError, setIndexError] = useState("");
   const [splitChoices, setSplitChoices] = useState<Map<number, Choice>>(new Map());
@@ -57,6 +59,7 @@ export default function ImportPage() {
     setTypeChoices(new Map());
     setFileName(file.name);
     setLoadError("");
+    setNeedsCode(false);
     try {
       if (file.name.toLowerCase().endsWith(".apkg")) {
         const code = getAccessCode();
@@ -66,6 +69,11 @@ export default function ImportPage() {
           body: file,
         });
         const body = await res.json().catch(() => ({}));
+        if (res.status === 401) {
+          setNeedsCode(true);
+          setDeck(null);
+          return;
+        }
         if (!res.ok) throw new Error(body.error ?? `could not read the package (${res.status})`);
         setDeck(notesFromApkg(body.notes));
       } else {
@@ -191,6 +199,7 @@ export default function ImportPage() {
           </span>
         </label>
         {indexError && <div className={styles.error}>{indexError}</div>}
+        {needsCode && <AccessNotice />}
         {loadError && <div className={styles.error}>{loadError}</div>}
       </div>
 

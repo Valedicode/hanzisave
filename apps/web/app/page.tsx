@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AccessCodeForm } from "./access-code-form";
 import styles from "./landing.module.css";
 
 const HSK_LEGEND = [
@@ -78,6 +79,8 @@ export default function Landing() {
             </Link>
           </div>
         </section>
+
+        <AccessCodeForm />
 
         <section className={styles.section} aria-labelledby="how">
           <h2 id="how" className={styles.sectionTitle}>

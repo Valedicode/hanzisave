@@ -5,7 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./rewrite.module.css";
 import { db, type DeckUnitRecord } from "@/lib/db";
 import { CardRequestError, requestCard } from "@/lib/card-client";
-import { getAccessCode, setAccessCode as storeAccessCode } from "@/lib/access-code";
+import { getAccessCode } from "@/lib/access-code";
+import { AccessNotice } from "../access-notice";
 import { checkCardFormat } from "@/lib/card-format";
 import { planComponentCards } from "@/lib/components";
 import { etaTracker, formatEta } from "@/lib/eta";
@@ -49,7 +50,7 @@ export default function RewritePage() {
   const [filter, setFilter] = useState<Filter>("pending");
   const [page, setPage] = useState(0);
   const [query, setQuery] = useState("");
-  const [accessCode, setAccessCode] = useState("");
+  const [needsCode, setNeedsCode] = useState(false);
   const [running, setRunning] = useState<{ done: number; total: number; etaMs: number | null } | null>(null);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<{ id: number; text: string } | null>(null);
@@ -61,7 +62,6 @@ export default function RewritePage() {
   useEffect(() => {
     db.deck_units.toArray().then((all) => {
       setUnits(all);
-      setAccessCode(getAccessCode());
       setLoaded(true);
     });
   }, []);
@@ -123,7 +123,7 @@ export default function RewritePage() {
           oldBack: u.oldBack || undefined,
           context: u.componentOf ? `part of the phrase ${u.componentOf}` : undefined,
         },
-        accessCode || undefined,
+        getAccessCode() || undefined,
       );
       const { back, changed } = splitChanged(raw);
       await patch(u.id!, { status: "generated", newBack: back, changed, problems: undefined, stale: false });
@@ -132,7 +132,8 @@ export default function RewritePage() {
       await patch(u.id!, { status: "failed", problems: err.problems ?? [err.message] });
       if (err.fatal) {
         stop.current = true;
-        setError(err.message);
+        if (err.status === 401) setNeedsCode(true);
+        else setError(err.message);
       }
     }
   };
@@ -200,6 +201,7 @@ export default function RewritePage() {
     if (queue.length === 0) return;
     stop.current = false;
     setError("");
+    setNeedsCode(false);
     const eta = etaTracker(queue.length);
     setRunning({ done: 0, total: queue.length, etaMs: null });
     let next = 0;
@@ -274,11 +276,6 @@ export default function RewritePage() {
     await generateOne(u);
   };
 
-  const saveAccessCode = (value: string) => {
-    setAccessCode(value);
-    storeAccessCode(value);
-  };
-
   const exportApproved = () => {
     const approved = units.filter((u) => u.status === "approved" && u.newBack);
     const out = buildAnkiTsv(approved.map((u) => ({ front: u.front, back: u.newBack!, type: u.type, tags: u.tags })));
@@ -344,11 +341,8 @@ export default function RewritePage() {
               Stop
             </button>
           )}
-          <label className={styles.code}>
-            Access code
-            <input type="password" value={accessCode} onChange={(e) => saveAccessCode(e.target.value)} />
-          </label>
         </div>
+        {needsCode && <AccessNotice />}
         {error && <div className={styles.error}>{error}</div>}
         {notice && <div className={styles.hint}>{notice}</div>}
         <div className={styles.row}>
