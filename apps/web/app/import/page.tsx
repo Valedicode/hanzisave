@@ -57,6 +57,9 @@ export default function ImportPage() {
 
   const save = async () => {
     if (!plan) return;
+    // Re-importing replaces every card, including rewrites that were already generated or approved.
+    const worked = await db.deck_units.where("status").notEqual("pending").count();
+    if (worked > 0 && !window.confirm(`Replacing the library discards ${worked} rewritten cards. Continue?`)) return;
     setSaving(true);
     const now = Date.now();
     await db.transaction("rw", db.deck_units, db.known, async () => {
@@ -199,7 +202,8 @@ export default function ImportPage() {
           </button>
           {saved && (
             <div className={styles.ok}>
-              Saved. Library now holds {saved.units} cards and {saved.known} known items.
+              Saved. Library now holds {saved.units} cards and {saved.known} known items.{" "}
+              <Link href="/rewrite">Continue to rewrite →</Link>
             </div>
           )}
         </div>
