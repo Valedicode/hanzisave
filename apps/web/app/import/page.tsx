@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import styles from "./import.module.css";
-import { parseAnkiExport, summarize, type ParsedDeck } from "@/lib/anki-import";
+import { notesFromApkg, parseAnkiExport, summarize, type ParsedDeck } from "@/lib/anki-import";
+import { getAccessCode } from "@/lib/access-code";
 import { buildDeckPlan, type CardType } from "@/lib/deck-plan";
 import type { Hsk30Index } from "@/lib/split-front";
 import { db, type DeckUnitRecord } from "@/lib/db";
@@ -15,6 +16,7 @@ type Choice = "keep" | "split";
 export default function ImportPage() {
   const [deck, setDeck] = useState<ParsedDeck | null>(null);
   const [fileName, setFileName] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [index, setIndex] = useState<Hsk30Index | null>(null);
   const [indexError, setIndexError] = useState("");
   const [splitChoices, setSplitChoices] = useState<Map<number, Choice>>(new Map());
@@ -53,7 +55,25 @@ export default function ImportPage() {
     setSplitChoices(new Map());
     setTypeChoices(new Map());
     setFileName(file.name);
-    setDeck(parseAnkiExport(await file.text()));
+    setLoadError("");
+    try {
+      if (file.name.toLowerCase().endsWith(".apkg")) {
+        const code = getAccessCode();
+        const res = await fetch("/api/apkg", {
+          method: "POST",
+          headers: { "Content-Type": "application/octet-stream", ...(code ? { "x-access-code": code } : {}) },
+          body: file,
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error ?? `could not read the package (${res.status})`);
+        setDeck(notesFromApkg(body.notes));
+      } else {
+        setDeck(parseAnkiExport(await file.text()));
+      }
+    } catch (e) {
+      setDeck(null);
+      setLoadError(e instanceof Error ? e.message : "could not read the file");
+    }
   };
 
   const setSplit = (row: number, c: Choice) =>
@@ -138,14 +158,17 @@ export default function ImportPage() {
 
       <div className={styles.panel}>
         <p className={styles.hint}>
-          In Anki: <b>File → Export → Notes in Plain Text</b> (with HTML kept). Choose that .txt here.
+          In Anki: <b>File → Export → Anki Deck Package (.apkg)</b>. A package carries Anki&apos;s own note ids, so
+          cards stay matched even if you edit a word later. A plain-text export (<b>Notes in Plain Text</b>, HTML
+          kept) also works, but matches by the word itself.
         </p>
         <input
           type="file"
-          accept=".txt,.tsv,text/plain"
+          accept=".apkg,.txt,.tsv,text/plain"
           onChange={(e) => onFile(e.target.files?.[0])}
         />
         {indexError && <div className={styles.error}>{indexError}</div>}
+        {loadError && <div className={styles.error}>{loadError}</div>}
       </div>
 
       {deck && summary && (
