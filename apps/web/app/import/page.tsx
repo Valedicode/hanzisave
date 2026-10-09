@@ -62,7 +62,7 @@ export default function ImportPage() {
     await db.transaction("rw", db.deck_units, db.known, async () => {
       await db.deck_units.clear();
       await db.known.where("source").equals("anki").delete();
-      await db.deck_units.bulkAdd(plan.units.map((u) => ({ ...u, createdAt: now })));
+      await db.deck_units.bulkAdd(plan.units.map((u) => ({ ...u, status: "pending" as const, createdAt: now })));
       await db.known.bulkPut(
         plan.known.map((k) => ({
           key: `${k.type}:${k.item}`,
