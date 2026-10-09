@@ -40,6 +40,7 @@ export default function Landing() {
           <Link href="/scan">Scan</Link>
           <Link href="/rewrite">Rewrite deck</Link>
           <Link href="/import">Import</Link>
+          <Link href="/analyze">Analyze</Link>
         </nav>
       </header>
 
@@ -93,29 +94,14 @@ export default function Landing() {
           </ol>
         </section>
 
-        <section className={styles.band}>
-          <h2 className={styles.bandTitle}>Your deck stays yours</h2>
-          <p className={styles.bandText}>
-            HanziSave reads your Anki export and never touches your review history. It only adds cards and rewrites the
-            text on the back, and you approve every card before it leaves the app.
-          </p>
-          <div className={styles.actions}>
-            <Link href="/rewrite" className={styles.primary}>
-              Rewrite your deck
-            </Link>
-            <Link href="/analyze" className={styles.link}>
-              Try the text analyzer
-            </Link>
-          </div>
-          <p className={styles.soon}>
-            <span>Coming next</span>
-            {NEXT_UP.map((item) => (
-              <span key={item} className={styles.chip}>
-                {item}
-              </span>
-            ))}
-          </p>
-        </section>
+        <p className={styles.soon}>
+          <span>Coming next</span>
+          {NEXT_UP.map((item) => (
+            <span key={item} className={styles.chip}>
+              {item}
+            </span>
+          ))}
+        </p>
       </main>
 
       <footer className={styles.footer}>HanziSave · made for reading Chinese</footer>
