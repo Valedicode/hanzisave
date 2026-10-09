@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hasAccess } from "@/lib/access";
+import { checkCardFormat } from "@/lib/card-format";
 import { CardRequestSchema } from "@/lib/card-schema";
 import { loadCardSpec } from "@/lib/card-spec";
 import { LlmError } from "@/lib/llm/types";
@@ -18,7 +19,17 @@ export async function POST(req: Request) {
   }
 
   try {
-    const back = await provider.generateCard(parsed.data, loadCardSpec());
+    const spec = loadCardSpec();
+    // Models occasionally return a card that is incomplete or all "unsure"; one retry is cheap.
+    let back = await provider.generateCard(parsed.data, spec);
+    let { problems } = checkCardFormat(back, parsed.data.type);
+    if (problems.length > 0) {
+      back = await provider.generateCard(parsed.data, spec);
+      ({ problems } = checkCardFormat(back, parsed.data.type));
+    }
+    if (problems.length > 0) {
+      return NextResponse.json({ error: "model returned an unusable card", problems, back }, { status: 502 });
+    }
     return NextResponse.json({ back });
   } catch (error) {
     if (error instanceof LlmError) {
