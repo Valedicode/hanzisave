@@ -59,6 +59,7 @@ export interface DeckUnitRecord {
   problems?: string[]; // why generation failed
   stale?: boolean; // the source note changed in Anki after this rewrite was made
   missing?: boolean; // no longer present in the latest Anki export
+  componentOf?: string; // a card made here from a part of this phrase; it does not exist in Anki until imported
   createdAt: number;
 }
 

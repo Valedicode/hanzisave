@@ -462,4 +462,11 @@ import { join } from "node:path";
   assert.deepEqual(planComponentCards(["银行"], new Set()).withoutParts, ["银行"]);
 }
 
+// mergeDeck(): cards made here (components) aren't "missing" before they reach Anki.
+{
+  const rec = (id, front, extra = {}) => ({ id, front, forms: [front], type: "word", format: "old", oldBack: "", tags: "", sourceRow: 0, status: "approved", createdAt: 0, ...extra });
+  const r = mergeDeck([rec(1, "注册", { componentOf: "注册银行卡" }), rec(2, "旧词")], []);
+  assert.deepEqual(r.missingFronts, ["旧词"]);
+}
+
 console.log("smoke-test: all checks passed");
