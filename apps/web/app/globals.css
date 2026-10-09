@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light;
   --bg: #f3f7f7;
   --panel: #ffffff;
   --ink: #14302f;
@@ -19,8 +20,9 @@
   --h6: #be2e42;
 }
 
+/* Dark values apply for the system setting unless light was chosen, or when dark was chosen. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0e1918;
     --panel: #162423;
     --ink: #eaf3f2;
@@ -35,6 +37,22 @@
     --oov: #66797a;
     color-scheme: dark;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0e1918;
+  --panel: #162423;
+  --ink: #eaf3f2;
+  --ink2: #95a9a7;
+  --line: #243836;
+  --hover: #1d2f2e;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --brand: #2bc7c2;
+  --brand-ink: #05201f;
+  --brand-soft: #123f3d;
+  --brand-deep: #5cdcd7;
+  --oov: #66797a;
+  color-scheme: dark;
 }
 
 html {
