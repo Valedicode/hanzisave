@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import styles from "./import.module.css";
+import { Spinner } from "../spinner";
 import { notesFromApkg, parseAnkiExport, summarize, type ParsedDeck } from "@/lib/anki-import";
 import { getAccessCode } from "@/lib/access-code";
 import { AccessNotice } from "../access-notice";
@@ -27,6 +28,7 @@ export default function ImportPage() {
   const [existing, setExisting] = useState<{ units: number; known: number } | null>(null);
   const [library, setLibrary] = useState<DeckUnitRecord[]>([]);
   const [saving, setSaving] = useState(false);
+  const [reading, setReading] = useState(false);
   const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
@@ -60,6 +62,7 @@ export default function ImportPage() {
     setFileName(file.name);
     setLoadError("");
     setNeedsCode(false);
+    setReading(true);
     try {
       if (file.name.toLowerCase().endsWith(".apkg")) {
         const code = getAccessCode();
@@ -82,6 +85,8 @@ export default function ImportPage() {
     } catch (e) {
       setDeck(null);
       setLoadError(e instanceof Error ? e.message : "could not read the file");
+    } finally {
+      setReading(false);
     }
   };
 
@@ -195,7 +200,16 @@ export default function ImportPage() {
           </span>
           <span className={styles.dropTitle}>{fileName || "Choose your Anki export"}</span>
           <span className={styles.dropHint}>
-            {fileName ? "Choose a different file" : ".apkg or .txt, or drop the file here"}
+            {reading ? (
+              <>
+                <Spinner />
+                Reading the file…
+              </>
+            ) : fileName ? (
+              "Choose a different file"
+            ) : (
+              ".apkg or .txt, or drop the file here"
+            )}
           </span>
         </label>
         {indexError && <div className={styles.error}>{indexError}</div>}
@@ -305,6 +319,7 @@ export default function ImportPage() {
           )}
           <div className={styles.toggle}>
             <button className={styles.on} onClick={saveMerge} disabled={saving}>
+              {saving && <Spinner />}
               {saving ? "Merging…" : "Merge into library"}
             </button>
             <button onClick={replaceAll} disabled={saving}>
@@ -323,6 +338,7 @@ export default function ImportPage() {
       {plan && !merge && (
         <div className={styles.panel}>
           <button className={styles.primary} onClick={saveFresh} disabled={saving}>
+            {saving && <Spinner />}
             {saving ? "Saving…" : `Save ${plan.units.length} cards to library`}
           </button>
           {saved && (
