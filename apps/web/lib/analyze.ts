@@ -28,7 +28,7 @@ export interface AnalyzeResult {
 
 // Splits on Chinese/Western sentence terminators and newlines, keeping the
 // terminator with the sentence it ends.
-function splitSentences(text: string): string[] {
+export function splitSentences(text: string): string[] {
   const parts = text.split(/(?<=[。！？!?\n])/);
   return parts.map((p) => p.trim()).filter(Boolean);
 }

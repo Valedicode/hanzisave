@@ -4,9 +4,7 @@ import { generateValidCard } from "@/lib/card-service";
 import { CardRequestSchema } from "@/lib/card-schema";
 import { loadCardSpec } from "@/lib/card-spec";
 import { LlmError } from "@/lib/llm/types";
-import { createOpenAiProvider } from "@/lib/llm/openai";
-
-const provider = createOpenAiProvider();
+import { provider } from "@/lib/llm/provider";
 
 export async function POST(req: Request) {
   if (!hasAccess(req)) {

@@ -15,6 +15,7 @@ import { parseReasoning } from "../lib/llm/reasoning.ts";
 import { generateValidCard } from "../lib/card-service.ts";
 import { buildAnkiTsv, splitChanged } from "../lib/rewrite.ts";
 import { mergeDeck } from "../lib/merge-deck.ts";
+import { scanText } from "../lib/scan.ts";
 import { parseBackup, serializeBackup } from "../lib/backup.ts";
 import { readApkg } from "../lib/apkg.ts";
 import { DatabaseSync } from "node:sqlite";
@@ -257,11 +258,15 @@ import { join } from "node:path";
     texts: [],
     cards: [],
     reviews: [],
+    new_cards: [{ id: 1, front: "苹果", status: "approved" }],
   };
   const text = serializeBackup(tables, new Date("2026-10-09T00:00:00Z"));
   const back = parseBackup(text);
   assert.deepEqual(back.tables, tables);
   assert.equal(back.exportedAt, "2026-10-09T00:00:00.000Z");
+  // a backup made before new_cards existed still restores, with an empty table
+  const { new_cards: _omit, ...older } = tables;
+  assert.deepEqual(parseBackup(JSON.stringify({ app: "hanzisave", version: 1, exportedAt: "x", tables: older })).tables.new_cards, []);
   assert.throws(() => parseBackup("not json"), /valid JSON/);
   assert.throws(() => parseBackup(JSON.stringify({ app: "other" })), /Not a HanziSave backup/);
   const badStatus = { ...JSON.parse(text), tables: { ...tables, deck_units: [{ front: "a", oldBack: "b", status: "weird" }] } };
@@ -351,6 +356,54 @@ import { join } from "node:path";
   assert.equal(byId[1].ankiNoteId, 10);
   assert.equal(byId[2].ankiNoteId, 11);
   assert.equal(r.changedFronts.length, 0);
+}
+
+// segment() with extra words: the learner's own vocabulary stays whole, levels still come from the lexicon.
+{
+  const plain = segment("叶公好龙的故事").map((w) => w.surface);
+  const withExtra = segment("叶公好龙的故事", { extra: new Set(["叶公好龙"]) });
+  assert.ok(plain.length >= 1);
+  assert.ok(withExtra.some((w) => w.surface === "叶公好龙"), "extra word should be kept whole");
+  assert.equal(withExtra.find((w) => w.surface === "叶公好龙").level, null);
+  const dianNao = segment("电脑很贵", { extra: new Set(["电脑"]) }).find((w) => w.surface === "电脑");
+  assert.equal(dianNao.level, 1); // lexicon level is kept for words that are also in the lexicon
+}
+
+// scanText(): known words and words at or below the level floor are skipped; counts and context are kept.
+{
+  const text = "叶公好龙是一个故事。电脑很贵，苹果也很贵。我喜欢苹果。";
+  const names = (r) => r.newWords.map((w) => w.surface);
+
+  const none = scanText(text, { known: new Set() });
+  assert.ok(names(none).includes("电脑"));
+  assert.equal(none.newWords.find((w) => w.surface === "电脑").level, 1);
+
+  const apple = none.newWords.find((w) => w.surface === "苹果");
+  assert.equal(apple.count, 2);
+  assert.equal(apple.sentence, "电脑很贵，苹果也很贵。"); // first sentence it appears in
+
+  const withKnown = scanText(text, { known: new Set(["叶公好龙", "电脑"]) });
+  assert.ok(!names(withKnown).includes("叶公好龙"), "the learner's own word is known, even if the lexicon lacks it");
+  assert.ok(!names(withKnown).includes("电脑"));
+  assert.ok(withKnown.knownWords > none.knownWords);
+
+  const floored = scanText(text, { known: new Set(), levelFloor: 1 });
+  assert.ok(!names(floored).includes("电脑"), "HSK 1 words are hidden with a floor of 1");
+  assert.ok(names(floored).length > 0, "words above the floor, or outside the HSK list, remain");
+  assert.ok(!names(scanText("hello 123 。", { known: new Set() })).length, "non-Han text yields no words");
+}
+
+// scanText(): tokens that are just easy known pieces joined are not new words; idioms still are.
+{
+  const names = (r) => r.newWords.map((w) => w.surface);
+  const text = "他三天后到了。叶公好龙是个故事。";
+  assert.ok(names(scanText(text, { known: new Set(), levelFloor: 0 })).includes("三天"), "without a floor, 三天 is still reported");
+  const floored = scanText(text, { known: new Set(), levelFloor: 2 });
+  assert.ok(!names(floored).includes("三天"), "三 + 天 are both easy, so 三天 is not new");
+  assert.ok(!names(floored).includes("到了"));
+  const viaKnown = scanText("他买了网购。", { known: new Set(["网", "购"]), levelFloor: 0 });
+  assert.ok(!names(viaKnown).includes("网购"), "pieces the learner already has make the compound known");
+  assert.ok(names(scanText("他背得滚瓜烂熟。", { known: new Set(["滚", "瓜", "烂", "熟"]), levelFloor: 6 })).includes("滚瓜烂熟"), "four-character idioms are never waved through");
 }
 
 console.log("smoke-test: all checks passed");

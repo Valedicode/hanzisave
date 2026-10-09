@@ -84,6 +84,9 @@ export default function Home() {
         <div className={styles.logo}>汉</div>
         <div className={styles.title}>HanziSave</div>
         {savedCount > 0 && <span className={styles.savedBadge}>{savedCount} cards saved</span>}
+        <Link href="/scan" className={styles.savedBadge}>
+          Scan new words
+        </Link>
         <Link href="/import" className={styles.savedBadge}>
           Import Anki deck
         </Link>
