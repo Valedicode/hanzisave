@@ -53,3 +53,34 @@ export function checkCardFormat(back: string, type: CardType): FormatCheck {
   if (/^\s*(\*\*|#{1,3}\s)/m.test(back)) problems.push("contains markdown");
   return { ok: problems.length === 0, problems };
 }
+
+// A word card with patterns gives each pattern its own example: three indented lines under the
+// bullet (sentence, pinyin, translation). "Patterns: -" says the word needs none. This is checked
+// when a card is generated, not by checkCardFormat, so cards already in the older format still
+// count as being in the card spec.
+export function checkPatternExamples(back: string): string[] {
+  const lines = back.split("\n");
+  const start = lines.findIndex((l) => l.trim().startsWith("Patterns:"));
+  if (start < 0) return [];
+  const problems: string[] = [];
+  let bullet: string | null = null;
+  let indented = 0;
+  const close = () => {
+    if (bullet !== null && indented < 3) problems.push(`pattern "${bullet}" needs an example, pinyin and translation under it`);
+  };
+  for (const line of lines.slice(start + 1)) {
+    if (/^\s+\S/.test(line)) {
+      indented++;
+      continue;
+    }
+    if (/^-\s+\S/.test(line)) {
+      close();
+      bullet = line.replace(/^-\s+/, "").split(/[\[(]/)[0].trim();
+      indented = 0;
+      continue;
+    }
+    break; // a blank line or the next label ends the section
+  }
+  close();
+  return problems;
+}

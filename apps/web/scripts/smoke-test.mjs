@@ -10,10 +10,10 @@ import { planSplit } from "../lib/split-front.ts";
 import { buildDeckPlan } from "../lib/deck-plan.ts";
 import { buildCardPrompt, cleanCardOutput } from "../lib/card-prompt.ts";
 import { hasAccess } from "../lib/access.ts";
-import { checkCardFormat } from "../lib/card-format.ts";
+import { checkCardFormat, checkPatternExamples } from "../lib/card-format.ts";
 import { parseReasoning } from "../lib/llm/reasoning.ts";
 import { generateValidCard } from "../lib/card-service.ts";
-import { buildAnkiTsv, splitChanged } from "../lib/rewrite.ts";
+import { buildAnkiTsv, splitChanged, toHtmlField } from "../lib/rewrite.ts";
 import { mergeDeck } from "../lib/merge-deck.ts";
 import { scanText } from "../lib/scan.ts";
 import { addPatternPinyin, withPatternPinyin } from "../lib/pattern-pinyin.ts";
@@ -185,7 +185,7 @@ import { join } from "node:path";
 // generateValidCard(): retries once on an unusable card, then reports the problems.
 {
   const NL = String.fromCharCode(10);
-  const good = ["Pinyin: a", "Jyutping: b", "Used in Cantonese: No", "Part of speech: Verb", "Register: Neutral", "Translation: t", "Patterns:", "- p", "Example: e"].join(NL);
+  const good = ["Pinyin: a", "Jyutping: b", "Used in Cantonese: No", "Part of speech: Verb", "Register: Neutral", "Translation: t", "Patterns:", "- p", "    s", "    py", "    tr", "Example: e"].join(NL);
   const bad = good.replace("Translation: t", "Translation: unsure");
   const seq = (...outs) => { let i = 0; return { generateCard: async () => outs[Math.min(i++, outs.length - 1)] }; };
   const req = { item: "x", type: "word" };
@@ -193,6 +193,10 @@ import { join } from "node:path";
   const failed = await generateValidCard(seq(bad), req, "spec");
   assert.equal(failed.ok, false);
   assert.deepEqual(failed.problems, ["Translation: is unsure"]);
+  const bare = good.replace(["    s", "    py", "    tr", ""].join(NL), "");
+  const noExample = await generateValidCard(seq(bare), req, "spec");
+  assert.equal(noExample.ok, false);
+  assert.ok(noExample.problems.some((p) => p.includes("needs an example")), "a pattern without an example is retried, then reported");
 }
 
 // splitChanged()/buildAnkiTsv(): the review note is stripped; the export parses back to the same cards.
@@ -520,6 +524,40 @@ import { join } from "node:path";
   const multi = await withPatternPinyin(["Patterns:", "- 做某事 + 很热闹 (x)", "- 用语言 + 表达 (y)"].join(NL));
   assert.equal(multi.split(NL)[1], "- 做某事 + 很热闹 [zuò mǒushì + hěn rènào] (x)");
   assert.equal(multi.split(NL)[2], "- 用语言 + 表达 [yòng yǔyán + biǎodá] (y)");
+}
+
+// Pattern examples: each pattern carries an indented example, pinyin and translation; "Patterns: -" needs none.
+{
+  const NL = String.fromCharCode(10);
+  const withExamples = [
+    "Patterns:",
+    "- 打车 + 去 + 地点 (take a taxi to a place)",
+    "    我打车去机场。",
+    "    Wǒ dǎchē qù jīchǎng.",
+    "    I took a taxi to the airport.",
+    "- 打车 + 回家 (take a taxi home)",
+    "    太晚了，我们打车回家吧。",
+    "    Tài wǎn le, wǒmen dǎchē huíjiā ba.",
+    "    It is late, let's take a taxi home.",
+    "Example: 我打车去机场。",
+  ].join(NL);
+  assert.deepEqual(checkPatternExamples(withExamples), []);
+  assert.deepEqual(checkPatternExamples(["Translation: cat", "Patterns: -", "Example: 我有一只猫。"].join(NL)), [], "no patterns is fine");
+  const missing = checkPatternExamples(withExamples.replace(/    太晚了.*\n.*\n.*\n/, ""));
+  assert.equal(missing.length, 1);
+  assert.ok(missing[0].includes("打车 + 回家"), "names the pattern that has no example");
+  assert.equal(checkPatternExamples("Patterns:" + NL + "- 打车 + 去 + 地点 (x)" + NL + "Example: e").length, 1, "a bare pattern line is rejected");
+
+  // the pinyin step adds brackets to pattern lines only; the indented lines stay as they are
+  const fake = (run) => "<" + run + ">";
+  const out = addPatternPinyin(withExamples, fake).split(NL);
+  assert.equal(out[1], "- 打车 + 去 + 地点 [<打车> + <去> + <地点>] (take a taxi to a place)");
+  assert.equal(out[2], "    我打车去机场。");
+  assert.equal(out[5], "- 打车 + 回家 [<打车> + <回家>] (take a taxi home)", "a pattern after an example still gets pinyin");
+  assert.equal(out[9], "Example: 我打车去机场。");
+
+  // indentation survives the Anki export
+  assert.equal(toHtmlField("- a" + NL + "    b"), "- a<br>&nbsp;&nbsp;&nbsp;&nbsp;b");
 }
 
 console.log("smoke-test: all checks passed");
