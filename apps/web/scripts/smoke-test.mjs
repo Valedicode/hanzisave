@@ -16,6 +16,13 @@ import { generateValidCard } from "../lib/card-service.ts";
 import { buildAnkiTsv, splitChanged } from "../lib/rewrite.ts";
 import { mergeDeck } from "../lib/merge-deck.ts";
 import { parseBackup, serializeBackup } from "../lib/backup.ts";
+import { readApkg } from "../lib/apkg.ts";
+import { DatabaseSync } from "node:sqlite";
+import { zstdCompressSync } from "node:zlib";
+import { zipSync, strToU8 } from "fflate";
+import { mkdtempSync, readFileSync as readFile, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // Longest-match re-merge: ICU splits 电脑 into 电+脑, lexicon has 电脑 (HSK1).
 {
@@ -259,6 +266,35 @@ import { parseBackup, serializeBackup } from "../lib/backup.ts";
   assert.throws(() => parseBackup(JSON.stringify({ app: "other" })), /Not a HanziSave backup/);
   const badStatus = { ...JSON.parse(text), tables: { ...tables, deck_units: [{ front: "a", oldBack: "b", status: "weird" }] } };
   assert.throws(() => parseBackup(JSON.stringify(badStatus)), /deck_units/);
+}
+
+// readApkg(): reads notes (with their Anki ids) from modern and legacy packages; rejects non-packages.
+{
+  const dir = mkdtempSync(join(tmpdir(), "hanzisave-test-"));
+  try {
+    const file = join(dir, "c.sqlite");
+    const db = new DatabaseSync(file);
+    db.exec("create table notes (id integer primary key, guid text, flds text, tags text)");
+    const US = String.fromCharCode(31);
+    const add = db.prepare("insert into notes (id, guid, flds, tags) values (?, ?, ?, ?)");
+    add.run(1663522866647, "g1", ["国土", "guótǔ<br>territory"].join(US), " grammar ");
+    add.run(1663522866648, "g2", ["直接", "zhíjiē"].join(US), "");
+    db.close();
+    const sqliteBytes = new Uint8Array(readFile(file));
+
+    const modern = zipSync({ "collection.anki21b": zstdCompressSync(sqliteBytes), media: strToU8("{}"), meta: strToU8("x") });
+    const legacy = zipSync({ "collection.anki2": sqliteBytes });
+    for (const pkg of [modern, legacy]) {
+      const notes = readApkg(pkg);
+      assert.equal(notes.length, 2);
+      assert.deepEqual(notes[0], { noteId: 1663522866647, guid: "g1", fields: ["国土", "guótǔ<br>territory"], tags: "grammar" });
+      assert.equal(notes[1].noteId, 1663522866648);
+    }
+    assert.throws(() => readApkg(zipSync({ media: strToU8("{}") })), /no collection/);
+    assert.throws(() => readApkg(strToU8("not a zip")), /Not an Anki package/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 console.log("smoke-test: all checks passed");
