@@ -7,6 +7,7 @@ import { db, type DeckUnitRecord } from "@/lib/db";
 import { CardRequestError, requestCard } from "@/lib/card-client";
 import { getAccessCode, setAccessCode as storeAccessCode } from "@/lib/access-code";
 import { checkCardFormat } from "@/lib/card-format";
+import { estimateRemainingMs, formatEta } from "@/lib/eta";
 import { buildAnkiTsv, splitChanged } from "@/lib/rewrite";
 
 type Status = DeckUnitRecord["status"];
@@ -44,7 +45,7 @@ export default function RewritePage() {
   const [page, setPage] = useState(0);
   const [query, setQuery] = useState("");
   const [accessCode, setAccessCode] = useState("");
-  const [running, setRunning] = useState<{ done: number; total: number } | null>(null);
+  const [running, setRunning] = useState<{ done: number; total: number; etaMs: number | null } | null>(null);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<{ id: number; text: string } | null>(null);
   const [exported, setExported] = useState("");
@@ -141,14 +142,16 @@ export default function RewritePage() {
     if (queue.length === 0) return;
     stop.current = false;
     setError("");
-    setRunning({ done: 0, total: queue.length });
+    const startedAt = Date.now();
+    setRunning({ done: 0, total: queue.length, etaMs: null });
     let next = 0;
     let done = 0;
     await Promise.all(
       Array.from({ length: CONCURRENCY }, async () => {
         while (next < queue.length && !stop.current) {
           await generateOne(queue[next++]);
-          setRunning({ done: ++done, total: queue.length });
+          done++;
+          setRunning({ done, total: queue.length, etaMs: estimateRemainingMs(startedAt, Date.now(), done, queue.length) });
         }
       }),
     );
@@ -256,7 +259,9 @@ export default function RewritePage() {
       <div className={styles.panel}>
         <div className={styles.row}>
           <button className={styles.primary} onClick={generateBatch} disabled={!!running || counts.pending === 0}>
-            {running ? `Generating ${running.done}/${running.total}…` : `Generate next ${Math.min(BATCH, counts.pending)}`}
+            {running
+              ? `Generating ${running.done}/${running.total}${running.etaMs !== null ? ` · ${formatEta(running.etaMs)}` : ""}…`
+              : `Generate next ${Math.min(BATCH, counts.pending)}`}
           </button>
           <button className={styles.secondary} onClick={generateAll} disabled={!!running || counts.pending === 0}>
             Generate all {counts.pending}
