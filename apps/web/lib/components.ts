@@ -41,20 +41,37 @@ export function splitComponents(phrase: string, known: ReadonlySet<string>): str
 export interface ComponentPlan {
   add: { front: string; componentOf: string }[];
   skipped: string[]; // components that already exist, so no card is made
+  unverified: string[]; // parts left out because they are not known words
   withoutParts: string[]; // phrases that did not split into anything
 }
 
-// `existing` is every word the learner already has or has queued. A component
-// is added once, and only if it is not in `existing`.
-export function planComponentCards(phrases: string[], existing: ReadonlySet<string>): ComponentPlan {
+// Only plain, short expressions are split. Longer strings and fronts with notes in them
+// (现场〔現場〕, 好 (as in 好久), 正宗, 地道) are idioms, sentences or annotated entries, and
+// splitting those makes fragments rather than words.
+const MIN_PHRASE = 3;
+const MAX_PHRASE = 5;
+const isPlainPhrase = (p: string) => HAN.test(p) && p.length >= MIN_PHRASE && p.length <= MAX_PHRASE;
+
+// `existing` is every word the learner already has or has queued. A component is added
+// once, and only if it is not in `existing` and `isWord` accepts it (a real word from a
+// dictionary or the learner's own deck, not a fragment like 回事 or 蒙蒙).
+export function planComponentCards(
+  phrases: string[],
+  existing: ReadonlySet<string>,
+  isWord: (word: string) => boolean = () => true,
+): ComponentPlan {
   const seen = new Set(existing);
-  const plan: ComponentPlan = { add: [], skipped: [], withoutParts: [] };
+  const plan: ComponentPlan = { add: [], skipped: [], unverified: [], withoutParts: [] };
   for (const phrase of phrases) {
-    const parts = splitComponents(phrase, existing);
+    const parts = isPlainPhrase(phrase) ? splitComponents(phrase, existing) : [];
     if (parts.length === 0) plan.withoutParts.push(phrase);
     for (const part of parts) {
       if (seen.has(part)) {
         if (!plan.skipped.includes(part)) plan.skipped.push(part);
+        continue;
+      }
+      if (!isWord(part)) {
+        if (!plan.unverified.includes(part)) plan.unverified.push(part);
         continue;
       }
       seen.add(part);

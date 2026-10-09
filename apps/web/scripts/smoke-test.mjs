@@ -463,6 +463,18 @@ import { join } from "node:path";
   assert.ok(plan.skipped.includes("银行卡"));
   assert.equal(plan.add.find((a) => a.front === "注册").componentOf, "注册银行卡");
   assert.deepEqual(planComponentCards(["银行"], new Set()).withoutParts, ["银行"]);
+
+  // only plain, short expressions are split
+  const odd = planComponentCards(["现场〔現場〕", "好 (as in 好久)", "不到长城非好汉"], new Set());
+  assert.equal(odd.add.length, 0);
+  assert.equal(odd.withoutParts.length, 3);
+
+  // parts that are not known words are left out and reported, not turned into cards
+  const real = new Set(["眼神", "接触"]);
+  const strict = planComponentCards(["眼神接触", "任重道远"], new Set(), (w) => real.has(w));
+  assert.deepEqual(strict.add.map((a) => a.front), ["眼神", "接触"]);
+  assert.ok(strict.unverified.length > 0, "fragments of the idiom are reported as left out");
+  assert.ok(strict.add.every((a) => a.componentOf === "眼神接触"));
 }
 
 // mergeDeck(): cards made here (components) aren't "missing" before they reach Anki.
