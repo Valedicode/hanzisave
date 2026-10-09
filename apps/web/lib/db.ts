@@ -49,6 +49,8 @@ export interface DeckUnitRecord {
   tags: string;
   sourceRow: number;
   splitFrom?: string;
+  ankiNoteId?: number; // Anki note id when imported from an .apkg
+  ankiGuid?: string;
   status: "pending" | "generated" | "approved" | "skipped" | "failed";
   newBack?: string; // rewritten Back in the card spec format
   changed?: string; // factual correction the model reported, for review
