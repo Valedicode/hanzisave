@@ -88,6 +88,13 @@ export interface NewCardRecord {
   createdAt: number;
 }
 
+// A card generated ahead of time for a word met in a sentence. Not a card yet: it only saves the wait.
+export interface CardCacheRecord {
+  key: string; // `${word}|${sentence}`
+  back: string;
+  createdAt: number;
+}
+
 export const db = new Dexie("hanzisave") as Dexie & {
   texts: EntityTable<TextRecord, "id">;
   cards: EntityTable<CardRecord, "id">;
@@ -96,6 +103,7 @@ export const db = new Dexie("hanzisave") as Dexie & {
   deck_units: EntityTable<DeckUnitRecord, "id">;
   known: EntityTable<KnownRecord, "key">;
   new_cards: EntityTable<NewCardRecord, "id">;
+  card_cache: EntityTable<CardCacheRecord, "key">;
 };
 
 db.version(1).stores({
@@ -123,3 +131,5 @@ db.version(3)
   );
 
 db.version(4).stores({ new_cards: "++id, front, status" });
+
+db.version(5).stores({ card_cache: "key, createdAt" });

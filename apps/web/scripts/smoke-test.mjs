@@ -14,6 +14,7 @@ import { checkCardFormat, checkPatternExamples } from "../lib/card-format.ts";
 import { parseReasoning } from "../lib/llm/reasoning.ts";
 import { generateValidCard } from "../lib/card-service.ts";
 import { parseGloss } from "../lib/gloss-prompt.ts";
+import { CardPrefetcher } from "../lib/card-prefetch.ts";
 import { createOpenAiProvider } from "../lib/llm/openai.ts";
 import { buildAnkiTsv, splitChanged, toHtmlField } from "../lib/rewrite.ts";
 import { mergeDeck } from "../lib/merge-deck.ts";
@@ -595,6 +596,90 @@ import { join } from "node:path";
     assert.ok(marked.flatMap((s) => s.words).filter((w) => /[。，！]/.test(w.surface)).every((w) => w.status === "other"));
   }
   assert.ok(markText("开会", { known: new Set(["开会"]) })[0].words.every((w) => w.status === "known"));
+}
+
+// CardPrefetcher: background cards in reading order, capped, reused, droppable, never cached on failure.
+{
+  const tick = () => new Promise((r) => setTimeout(r, 5));
+  const settle = async () => { for (let i = 0; i < 20; i++) await tick(); };
+  const make = (opts = {}) => {
+    const stored = new Map();
+    const started = [];
+    let active = 0;
+    let peak = 0;
+    const deps = {
+      generate: async (word, sentence) => {
+        started.push(word);
+        active++;
+        peak = Math.max(peak, active);
+        await tick();
+        active--;
+        if (opts.fail?.has(word)) throw Object.assign(new Error("boom"), { fatal: opts.fatal === true });
+        return "card:" + word;
+      },
+      cache: { get: async (k) => stored.get(k), put: async (k, v) => void stored.set(k, v) },
+      concurrency: 2,
+      cap: opts.cap ?? 20,
+      isFatal: (e) => e.fatal === true,
+      onProgress: (p) => (deps.last = p),
+    };
+    return { p: new CardPrefetcher(deps), deps, stored, started, peak: () => peak };
+  };
+  const items = (...words) => words.map((word) => ({ word, sentence: "s" + word }));
+
+  // reading order, at most 2 at a time, only up to the cap
+  const a = make({ cap: 3 });
+  a.p.start(items("a", "b", "c", "d", "e"));
+  await settle();
+  assert.deepEqual(a.started, ["a", "b", "c"], "in reading order, capped");
+  assert.equal(a.peak(), 2, "never more than the concurrency");
+  assert.deepEqual(a.deps.last, { ready: 3, total: 3 });
+  assert.equal(a.stored.get("a|sa"), "card:a", "results are cached");
+
+  // a request reuses finished and in-flight work, and jumps the queue otherwise
+  const b = make();
+  b.p.start(items("a", "b", "c", "d"));
+  const early = b.p.request("d", "sd");
+  assert.equal(await early, "card:d");
+  assert.equal(b.started.filter((w) => w === "d").length, 1, "d is generated once even though it was queued last");
+  assert.ok(b.started.indexOf("d") < 3, "and ahead of the words still waiting");
+  await settle();
+  assert.equal(b.started.filter((w) => w === "d").length, 1);
+  const before = b.started.length;
+  assert.equal(await b.p.request("a", "sa"), "card:a");
+  assert.equal(b.started.length, before, "a finished word is not generated again");
+  assert.equal(await b.p.request("zz", "other"), "card:zz", "a word that was never queued is generated on demand");
+
+  // dropping a word before it starts, and starting a new scan
+  const c = make();
+  c.p.start(items("a", "b", "c", "d"));
+  c.p.drop(["c", "d"]);
+  await settle();
+  assert.deepEqual(c.started, ["a", "b"]);
+  assert.deepEqual(c.deps.last, { ready: 2, total: 2 });
+  const e = make();
+  e.p.start(items("a", "b", "c", "d"));
+  e.p.start(items("x"));
+  await settle();
+  assert.ok(!e.started.includes("c") && !e.started.includes("d") && e.started.includes("x"), "a new scan replaces the old queue");
+
+  // a failure is not cached and is retried by the next request; a fatal one stops the queue
+  const f = make({ fail: new Set(["b"]) });
+  f.p.start(items("a", "b"));
+  await settle();
+  assert.equal(f.stored.has("b|sb"), false);
+  await assert.rejects(f.p.request("b", "sb"), /boom/);
+  const g = make({ fail: new Set(["a"]), fatal: true });
+  g.p.start(items("a", "b", "c", "d"));
+  await settle();
+  assert.ok(!g.started.includes("d"), "nothing more is started after a fatal error");
+
+  // a card made ahead of time is used as is; fresh() ignores it and replaces it
+  const h = make();
+  h.stored.set("a|sa", "old");
+  assert.equal(await h.p.request("a", "sa"), "old");
+  assert.equal(await h.p.fresh("a", "sa"), "card:a");
+  assert.equal(h.stored.get("a|sa"), "card:a");
 }
 
 console.log("smoke-test: all checks passed");
