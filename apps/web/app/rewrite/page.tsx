@@ -9,7 +9,9 @@ import { getAccessCode, setAccessCode as storeAccessCode } from "@/lib/access-co
 import { checkCardFormat } from "@/lib/card-format";
 import { planComponentCards } from "@/lib/components";
 import { etaTracker, formatEta } from "@/lib/eta";
+import { lookup } from "@/lib/lexicon";
 import { loadKnownWords } from "@/lib/known-db";
+import type { Hsk30Index } from "@/lib/split-front";
 import { buildAnkiTsv, splitChanged } from "@/lib/rewrite";
 
 type Status = DeckUnitRecord["status"];
@@ -31,6 +33,8 @@ const BATCH = 25;
 const CONCURRENCY = 3;
 // Rough cost of one card with the default model; only used for the confirmation prompt.
 const COST_PER_CARD = 0.0013;
+// The one-time component backfill is offered until it has been run or skipped.
+const BACKFILL_KEY = "hanzisave.componentBackfill.v1";
 
 // A Back that already has every label of the card spec needs no regeneration.
 const alreadyInFormat = (u: DeckUnitRecord) => checkCardFormat(u.oldBack, u.type).ok;
@@ -52,6 +56,7 @@ export default function RewritePage() {
   const [editing, setEditing] = useState<{ id: number; text: string } | null>(null);
   const [exported, setExported] = useState("");
   const [notice, setNotice] = useState("");
+  const [backfillOpen, setBackfillOpen] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const stop = useRef(false);
 
@@ -59,6 +64,11 @@ export default function RewritePage() {
     db.deck_units.toArray().then((all) => {
       setUnits(all);
       setAccessCode(getAccessCode());
+      try {
+        setBackfillOpen(localStorage.getItem(BACKFILL_KEY) === null);
+      } catch {
+        // storage unavailable: the step is simply not offered
+      }
       setLoaded(true);
     });
   }, []);
@@ -148,6 +158,51 @@ export default function RewritePage() {
     return queue.filter((u) => !skip.has(u.id));
   };
 
+  // Fixed expressions (注册银行卡) get a card for each part (注册, 银行卡). A part is only
+  // added if it isn't already a card, in the deck, known, or queued from a scan.
+  const addComponentCards = async (cards: DeckUnitRecord[]) => {
+    const phrases = cards.filter((c) => c.type === "word").map((c) => c.front);
+    if (phrases.length === 0) return;
+    const existing = new Set(await loadKnownWords());
+    for (const u of await db.deck_units.toArray()) {
+      existing.add(u.front);
+      for (const f of u.forms) existing.add(f);
+    }
+    // A part must be a real word: in the HSK lists or already in the learner's own deck.
+    const hsk30: Hsk30Index | null = await fetch("/hsk30-index.json")
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    const isWord = (w: string) => lookup(w) !== undefined || hsk30?.forms[w] !== undefined;
+    const plan = planComponentCards(phrases, existing, isWord);
+    if (plan.add.length > 0) {
+      const now = Date.now();
+      const records: DeckUnitRecord[] = plan.add.map((a) => ({
+        front: a.front,
+        forms: [a.front],
+        type: "word",
+        format: "old",
+        oldBack: "",
+        tags: "",
+        sourceRow: 0,
+        componentOf: a.componentOf,
+        status: "pending",
+        createdAt: now,
+      }));
+      const ids = await db.deck_units.bulkAdd(records, { allKeys: true });
+      setUnits((prev) => [...prev, ...records.map((r, i) => ({ ...r, id: ids[i] as number }))]);
+    }
+    const message =
+      plan.add.length > 0
+        ? `Added ${plan.add.length} component cards: ${plan.add.map((a) => a.front).join(", ")}. ` +
+          `${plan.skipped.length} parts already existed.`
+        : "";
+    const left =
+      plan.unverified.length > 0
+        ? ` Left out ${plan.unverified.length} parts that are not in the HSK lists or your deck: ${plan.unverified.join(", ")}.`
+        : "";
+    if (message || left) setNotice((prev) => (prev ? `${prev} ${message}${left}` : `${message}${left}`.trim()));
+  };
+
   const runQueue = async (queue: DeckUnitRecord[]) => {
     if (queue.length === 0) return;
     stop.current = false;
@@ -166,6 +221,10 @@ export default function RewritePage() {
       }),
     );
     setRunning(null);
+
+    // Phrase cards that were just generated also get cards for their parts.
+    const fresh = await db.deck_units.where(":id").anyOf(queue.map((u) => u.id!)).toArray();
+    await addComponentCards(fresh.filter((u) => u.status === "generated" && !u.componentOf));
   };
 
   const pendingCards = () => units.filter((u) => u.status === "pending");
@@ -194,43 +253,17 @@ export default function RewritePage() {
     setSelected(new Set());
   };
 
-  // Fixed expressions (注册银行卡) get a card for each part (注册, 银行卡). A part is only
-  // added if it isn't already a card, in the deck, known, or queued from a scan.
-  const addComponentCards = async (cards: DeckUnitRecord[]) => {
-    const phrases = cards.filter((c) => c.type === "word").map((c) => c.front);
-    if (phrases.length === 0) return;
-    const existing = new Set(await loadKnownWords());
-    for (const u of units) {
-      existing.add(u.front);
-      for (const f of u.forms) existing.add(f);
+  const finishBackfill = async (apply: boolean) => {
+    if (apply) {
+      const all = await db.deck_units.toArray();
+      await addComponentCards(all.filter((u) => !u.componentOf));
     }
-    const plan = planComponentCards(phrases, existing);
-    if (plan.add.length > 0) {
-      const now = Date.now();
-      const records: DeckUnitRecord[] = plan.add.map((a) => ({
-        front: a.front,
-        forms: [a.front],
-        type: "word",
-        format: "old",
-        oldBack: "",
-        tags: "",
-        sourceRow: 0,
-        componentOf: a.componentOf,
-        status: "pending",
-        createdAt: now,
-      }));
-      const ids = await db.deck_units.bulkAdd(records, { allKeys: true });
-      setUnits((prev) => [...prev, ...records.map((r, i) => ({ ...r, id: ids[i] as number }))]);
+    try {
+      localStorage.setItem(BACKFILL_KEY, "done");
+    } catch {
+      // not remembered
     }
-    setNotice(
-      plan.add.length > 0
-        ? `Added ${plan.add.length} component cards: ${plan.add.map((a) => a.front).join(", ")}. ` +
-            `${plan.skipped.length} parts already existed.`
-        : plan.skipped.length > 0
-          ? `Nothing to add: all ${plan.skipped.length} parts already exist (${plan.skipped.join(", ")}).`
-          : "These phrases did not split into smaller words.",
-    );
-    setSelected(new Set());
+    setBackfillOpen(false);
   };
 
   const setStatus = async (ids: number[], status: Status) => {
@@ -304,6 +337,23 @@ export default function RewritePage() {
         </Link>
         <div className={styles.title}>Rewrite deck</div>
       </div>
+
+      {backfillOpen && units.length > 0 && (
+        <div className={styles.panel}>
+          <div>
+            <b>One-time step.</b> Split your existing fixed expressions (like 注册银行卡) into their parts and add the
+            parts you don&apos;t have yet as new cards. From now on this happens automatically whenever cards are generated.
+          </div>
+          <div className={styles.row}>
+            <button className={styles.primary} onClick={() => finishBackfill(true)} disabled={!!running}>
+              Create component cards now
+            </button>
+            <button className={styles.secondary} onClick={() => finishBackfill(false)} disabled={!!running}>
+              Skip
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className={styles.panel}>
         <div className={styles.row}>
@@ -400,13 +450,6 @@ export default function RewritePage() {
             onClick={() => approveIds(selectedToApprove)}
           >
             Approve selected ({selectedToApprove.length})
-          </button>
-          <button
-            className={styles.secondary}
-            disabled={selectedCards.every((c) => c.type !== "word")}
-            onClick={() => addComponentCards(selectedCards)}
-          >
-            Add component cards
           </button>
           <button className={styles.secondary} disabled={approvableAll.length === 0} onClick={() => approveIds(approvableAll)}>
             Approve all {approvableAll.length}
@@ -521,11 +564,6 @@ export default function RewritePage() {
                 {u.newBack && (
                   <button className={styles.secondary} onClick={() => setEditing({ id: u.id!, text: u.newBack! })}>
                     Edit
-                  </button>
-                )}
-                {u.type === "word" && !u.componentOf && (
-                  <button className={styles.secondary} onClick={() => addComponentCards([u])}>
-                    Add components
                   </button>
                 )}
                 <button className={styles.secondary} onClick={() => regenerate(u)} disabled={!!running}>
