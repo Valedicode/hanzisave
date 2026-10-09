@@ -38,11 +38,36 @@ export interface GlossCacheRecord {
   createdAt: number;
 }
 
+// One card per imported (and possibly split) Anki note; rewritten in A0.
+export interface DeckUnitRecord {
+  id?: number;
+  front: string;
+  forms: string[];
+  type: "word" | "grammar";
+  format: "old" | "intermediate" | "current";
+  oldBack: string;
+  tags: string;
+  sourceRow: number;
+  splitFrom?: string;
+  createdAt: number;
+}
+
+// The known set: everything the learner already has (words and grammar).
+export interface KnownRecord {
+  key: string; // `${type}:${item}`
+  item: string;
+  type: "word" | "grammar";
+  source: "anki" | "manual";
+  createdAt: number;
+}
+
 export const db = new Dexie("hanzisave") as Dexie & {
   texts: EntityTable<TextRecord, "id">;
   cards: EntityTable<CardRecord, "id">;
   reviews: EntityTable<ReviewRecord, "id">;
   gloss_cache: EntityTable<GlossCacheRecord, "key">;
+  deck_units: EntityTable<DeckUnitRecord, "id">;
+  known: EntityTable<KnownRecord, "key">;
 };
 
 db.version(1).stores({
@@ -50,4 +75,9 @@ db.version(1).stores({
   cards: "++id, word, textId, createdAt",
   reviews: "++id, cardId, createdAt",
   gloss_cache: "key, word",
+});
+
+db.version(2).stores({
+  deck_units: "++id, front, type, sourceRow",
+  known: "key, item, type, source",
 });
