@@ -13,6 +13,7 @@ import { hasAccess } from "../lib/access.ts";
 import { checkCardFormat } from "../lib/card-format.ts";
 import { parseReasoning } from "../lib/llm/reasoning.ts";
 import { generateValidCard } from "../lib/card-service.ts";
+import { buildAnkiTsv, splitChanged } from "../lib/rewrite.ts";
 
 // Longest-match re-merge: ICU splits 电脑 into 电+脑, lexicon has 电脑 (HSK1).
 {
@@ -179,6 +180,25 @@ import { generateValidCard } from "../lib/card-service.ts";
   const failed = await generateValidCard(seq(bad), req, "spec");
   assert.equal(failed.ok, false);
   assert.deepEqual(failed.problems, ["Translation: is unsure"]);
+}
+
+// splitChanged()/buildAnkiTsv(): the review note is stripped; the export parses back to the same cards.
+{
+  const NL = String.fromCharCode(10);
+  assert.deepEqual(splitChanged(["Pinyin: a", "Example: e", "Changed: fixed the pinyin"].join(NL)), { back: ["Pinyin: a", "Example: e"].join(NL), changed: "fixed the pinyin" });
+  assert.deepEqual(splitChanged("Pinyin: a"), { back: "Pinyin: a" });
+  const back = ["Pinyin: guótǔ", 'Example: 他说"好" & 走了', "Translation: a < b"].join(NL);
+  const out = buildAnkiTsv([
+    { front: "国土", back, type: "word", tags: "" },
+    { front: "又…又…", back: "Pattern: x", type: "grammar", tags: "old" },
+    { front: "国土", back: "dup", type: "word", tags: "" },
+  ]);
+  assert.equal(out.count, 2);
+  assert.deepEqual(out.skippedDuplicates, ["国土"]);
+  const parsed = parseAnkiExport(out.tsv);
+  assert.deepEqual(parsed.notes.map((n) => n.front), ["国土", "又…又…"]);
+  assert.equal(parsed.notes[0].backText, back);
+  assert.equal(parsed.notes[1].tags, "old grammar");
 }
 
 console.log("smoke-test: all checks passed");

@@ -49,6 +49,10 @@ export interface DeckUnitRecord {
   tags: string;
   sourceRow: number;
   splitFrom?: string;
+  status: "pending" | "generated" | "approved" | "skipped" | "failed";
+  newBack?: string; // rewritten Back in the card spec format
+  changed?: string; // factual correction the model reported, for review
+  problems?: string[]; // why generation failed
   createdAt: number;
 }
 
@@ -81,3 +85,15 @@ db.version(2).stores({
   deck_units: "++id, front, type, sourceRow",
   known: "key, item, type, source",
 });
+
+// Rewrite workflow: every imported card starts as "pending".
+db.version(3)
+  .stores({ deck_units: "++id, front, type, sourceRow, status" })
+  .upgrade((tx) =>
+    tx
+      .table("deck_units")
+      .toCollection()
+      .modify((u) => {
+        u.status ??= "pending";
+      }),
+  );
