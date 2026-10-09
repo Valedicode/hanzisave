@@ -6,6 +6,7 @@ import styles from "./scan.module.css";
 import { db, type NewCardRecord } from "@/lib/db";
 import { getAccessCode } from "@/lib/access-code";
 import { AccessNotice } from "../access-notice";
+import { Spinner } from "../spinner";
 import { CardRequestError, requestCard } from "@/lib/card-client";
 import { resizeImage } from "@/lib/image-resize";
 import { loadKnownWords, markKnown } from "@/lib/known-db";
@@ -33,6 +34,7 @@ export default function ScanPage() {
   const [cards, setCards] = useState<NewCardRecord[]>([]);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [generating, setGenerating] = useState(0);
+  const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
   const [error, setError] = useState("");
   const [needsCode, setNeedsCode] = useState(false);
   const [editing, setEditing] = useState<{ id: number; text: string } | null>(null);
@@ -115,7 +117,16 @@ export default function ScanPage() {
     removeFromResult(surfaces);
   };
 
+  const setBusy = (id: number, on: boolean) =>
+    setBusyIds((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+
   const generate = async (card: NewCardRecord) => {
+    setBusy(card.id!, true);
     try {
       const back = await requestCard(
         { item: card.front, type: "word", context: card.context.slice(0, 400) },
@@ -127,6 +138,8 @@ export default function ScanPage() {
       await patchCard(card.id!, { status: "failed", problems: err.problems ?? [err.message] });
       if (err.status === 401) setNeedsCode(true);
       else if (err.fatal) setError(err.message);
+    } finally {
+      setBusy(card.id!, false);
     }
   };
 
@@ -216,7 +229,14 @@ export default function ScanPage() {
         />
         <div className={styles.row}>
           <label className={styles.secondary}>
-            {ocrBusy ? "Reading image…" : "Take or choose a photo"}
+            {ocrBusy ? (
+              <>
+                <Spinner />
+                Reading image…
+              </>
+            ) : (
+              "Take or choose a photo"
+            )}
             <input
               type="file"
               accept="image/*"
@@ -311,7 +331,14 @@ export default function ScanPage() {
       {(cards.length > 0 || generating > 0) && (
         <div className={styles.panel}>
           <div className={styles.sectionTitle}>
-            Your new cards{generating > 0 && <span className={styles.hint}> · generating {generating}…</span>}
+            Your new cards
+            {generating > 0 && (
+              <span className={styles.hint}>
+                {" "}
+                · <Spinner />
+                generating {generating}…
+              </span>
+            )}
           </div>
           <div className={styles.row}>
             <button className={styles.primary} disabled={exportable.length === 0} onClick={exportCards}>
@@ -341,7 +368,14 @@ export default function ScanPage() {
                 )
               ) : (
                 <div className={styles.hint}>
-                  {c.status === "failed" ? (c.problems ?? []).join("; ") : "Waiting for the card…"}
+                  {c.status === "failed" && !busyIds.has(c.id!) ? (
+                    (c.problems ?? []).join("; ")
+                  ) : (
+                    <>
+                      <Spinner />
+                      {busyIds.has(c.id!) ? "Generating the card…" : "Waiting for the card…"}
+                    </>
+                  )}
                 </div>
               )}
               <div className={styles.row}>
@@ -383,7 +417,8 @@ export default function ScanPage() {
                       </>
                     )}
                     {(c.status === "failed" || c.status === "generated") && (
-                      <button className={styles.secondary} onClick={() => generate(c)}>
+                      <button className={styles.secondary} onClick={() => generate(c)} disabled={busyIds.has(c.id!)}>
+                        {busyIds.has(c.id!) && <Spinner />}
                         {c.back ? "Regenerate" : "Retry"}
                       </button>
                     )}
