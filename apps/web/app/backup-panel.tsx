@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { exportBackup, restoreBackup } from "@/lib/backup-db";
+import styles from "./backup-panel.module.css";
 
 // Download or restore the whole library as one JSON file. Browser storage can be
 // cleared or lost, so this is the only copy of the work that lives outside it.
@@ -32,16 +33,25 @@ export function BackupPanel({ className }: { className?: string }) {
 
   return (
     <div className={className}>
-      <div>
-        <b>Backup</b> — the library lives in this browser only. Download a copy now and then.
+      <div className={styles.title}>Backup</div>
+      <div className={styles.text}>
+        The library lives in this browser only. Download a copy now and then, and restore it here if you ever lose it.
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-        <button onClick={download}>Download backup</button>
-        <label>
-          Restore from file <input type="file" accept="application/json,.json" onChange={(e) => restore(e.target.files?.[0])} />
+      <div className={styles.row}>
+        <button className={styles.button} onClick={download}>
+          Download backup
+        </button>
+        <label className={styles.button}>
+          Restore from file
+          <input
+            className={styles.fileInput}
+            type="file"
+            accept="application/json,.json"
+            onChange={(e) => restore(e.target.files?.[0])}
+          />
         </label>
       </div>
-      {message && <div>{message}</div>}
+      {message && <div className={styles.message}>{message}</div>}
     </div>
   );
 }
