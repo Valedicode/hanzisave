@@ -24,6 +24,9 @@ const BATCH = 25;
 const CONCURRENCY = 3;
 const CODE_KEY = "hanzisave.accessCode";
 
+// Cards that have a rewrite waiting for approval.
+const approvable = (u: DeckUnitRecord) => !!u.newBack && u.status !== "approved";
+
 export default function RewritePage() {
   const [units, setUnits] = useState<DeckUnitRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -34,6 +37,7 @@ export default function RewritePage() {
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<{ id: number; text: string } | null>(null);
   const [exported, setExported] = useState("");
+  const [selected, setSelected] = useState<Set<number>>(new Set());
   const stop = useRef(false);
 
   useEffect(() => {
@@ -68,6 +72,11 @@ export default function RewritePage() {
   const shown = useMemo(() => units.filter((u) => filter === "all" || u.status === filter), [units, filter]);
   const pageCount = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
   const visible = shown.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const visibleApprovable = visible.filter(approvable).map((u) => u.id!);
+  const allVisibleSelected = visibleApprovable.length > 0 && visibleApprovable.every((id) => selected.has(id));
+  const approvableAll = units.filter(approvable).map((u) => u.id!);
+  // Selection can go stale (a card approved, skipped or edited elsewhere), so count only live ones.
+  const selectedIds = approvableAll.filter((id) => selected.has(id));
 
   const generateOne = async (u: DeckUnitRecord) => {
     try {
@@ -102,6 +111,21 @@ export default function RewritePage() {
     );
     setRunning(null);
   };
+
+  const approveIds = async (ids: number[]) => {
+    if (ids.length === 0) return;
+    await db.deck_units.where(":id").anyOf(ids).modify({ status: "approved" });
+    const done = new Set(ids);
+    setUnits((prev) => prev.map((u) => (u.id !== undefined && done.has(u.id) ? { ...u, status: "approved" } : u)));
+    setSelected(new Set());
+  };
+
+  const toggleSelected = (id: number) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
 
   const regenerate = async (u: DeckUnitRecord) => {
     setError("");
@@ -195,11 +219,52 @@ export default function RewritePage() {
         ))}
       </div>
 
+      {approvableAll.length > 0 && (
+        <div className={styles.row}>
+          <label className={styles.check}>
+            <input
+              type="checkbox"
+              checked={allVisibleSelected}
+              disabled={visibleApprovable.length === 0}
+              onChange={() =>
+                setSelected((prev) => {
+                  const next = new Set(prev);
+                  for (const id of visibleApprovable) {
+                    if (allVisibleSelected) next.delete(id);
+                    else next.add(id);
+                  }
+                  return next;
+                })
+              }
+            />
+            Select all on this page
+          </label>
+          <button
+            className={styles.primary}
+            disabled={selectedIds.length === 0}
+            onClick={() => approveIds(selectedIds)}
+          >
+            Approve selected ({selectedIds.length})
+          </button>
+          <button className={styles.secondary} onClick={() => approveIds(approvableAll)}>
+            Approve all {approvableAll.length}
+          </button>
+        </div>
+      )}
+
       {visible.map((u) => {
         const draft = editing && editing.id === u.id ? editing : null;
         return (
         <div key={u.id} className={styles.card}>
           <div className={styles.cardHead}>
+            {approvable(u) && (
+              <input
+                type="checkbox"
+                aria-label={`Select ${u.front}`}
+                checked={selected.has(u.id!)}
+                onChange={() => toggleSelected(u.id!)}
+              />
+            )}
             <span className={styles.front}>{u.front}</span>
             <span className={styles.badge}>{u.type}</span>
             <span className={styles.badge}>was {u.format}</span>
