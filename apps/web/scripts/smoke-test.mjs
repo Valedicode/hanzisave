@@ -17,7 +17,7 @@ import { parseGloss } from "../lib/gloss-prompt.ts";
 import { createOpenAiProvider } from "../lib/llm/openai.ts";
 import { buildAnkiTsv, splitChanged, toHtmlField } from "../lib/rewrite.ts";
 import { mergeDeck } from "../lib/merge-deck.ts";
-import { scanText } from "../lib/scan.ts";
+import { markText, scanText } from "../lib/scan.ts";
 import { addPatternPinyin, withPatternPinyin } from "../lib/pattern-pinyin.ts";
 import { planComponentCards, splitComponents } from "../lib/components.ts";
 import { estimateRemainingMs, etaTracker, formatEta } from "../lib/eta.ts";
@@ -581,6 +581,20 @@ import { join } from "node:path";
   calls.length = 0;
   await assert.rejects(createOpenAiProvider(fake("nope"), "qwen/test", undefined).generateGloss({ word: "电脑", sentence: "s" }), /unusable gloss/);
   assert.equal(calls.length, 2);
+}
+
+// markText(): the reading view marks exactly the words scanText reports as new, and leaves punctuation alone.
+{
+  const text = "我们明天去开会。他喜欢点外卖，而且不爱做饭！";
+  for (const opts of [{ known: new Set() }, { known: new Set(["开会"]), levelFloor: 2 }, { known: new Set(["开会"]), levelFloor: 6 }]) {
+    const marked = markText(text, opts);
+    assert.equal(marked.map((s) => s.text).join(""), text, "every character is kept, in order");
+    assert.equal(marked.flatMap((s) => s.words).map((w) => w.surface).join(""), text.replace(/\s/g, ""));
+    const newFromMarks = [...new Set(marked.flatMap((s) => s.words).filter((w) => w.status === "new").map((w) => w.surface))];
+    assert.deepEqual(newFromMarks, scanText(text, opts).newWords.map((w) => w.surface), "same words as the new-word list");
+    assert.ok(marked.flatMap((s) => s.words).filter((w) => /[。，！]/.test(w.surface)).every((w) => w.status === "other"));
+  }
+  assert.ok(markText("开会", { known: new Set(["开会"]) })[0].words.every((w) => w.status === "known"));
 }
 
 console.log("smoke-test: all checks passed");
