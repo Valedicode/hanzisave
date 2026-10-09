@@ -17,7 +17,7 @@ import { buildAnkiTsv, splitChanged } from "../lib/rewrite.ts";
 import { mergeDeck } from "../lib/merge-deck.ts";
 import { scanText } from "../lib/scan.ts";
 import { planComponentCards, splitComponents } from "../lib/components.ts";
-import { estimateRemainingMs, formatEta } from "../lib/eta.ts";
+import { estimateRemainingMs, etaTracker, formatEta } from "../lib/eta.ts";
 import { parseBackup, serializeBackup } from "../lib/backup.ts";
 import { readApkg } from "../lib/apkg.ts";
 import { DatabaseSync } from "node:sqlite";
@@ -438,6 +438,8 @@ import { join } from "node:path";
   assert.equal(estimateRemainingMs(0, 5000, 0, 10), null, "no estimate before the first completion");
   assert.equal(estimateRemainingMs(0, 5000, 10, 10), null, "no estimate once finished");
   assert.equal(estimateRemainingMs(0, 10_000, 5, 15), 20_000); // 2 s per card, 10 cards left
+  assert.equal(etaTracker(10)(0), null, "the tracker gives no estimate before anything is done");
+  assert.equal(etaTracker(10)(10), null);
   assert.equal(formatEta(400), "~1 s left");
   assert.equal(formatEta(45_000), "~45 s left");
   assert.equal(formatEta(4 * 60_000), "~4 min left");

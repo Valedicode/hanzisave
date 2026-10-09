@@ -7,7 +7,7 @@ import { db, type DeckUnitRecord } from "@/lib/db";
 import { CardRequestError, requestCard } from "@/lib/card-client";
 import { getAccessCode, setAccessCode as storeAccessCode } from "@/lib/access-code";
 import { checkCardFormat } from "@/lib/card-format";
-import { estimateRemainingMs, formatEta } from "@/lib/eta";
+import { etaTracker, formatEta } from "@/lib/eta";
 import { buildAnkiTsv, splitChanged } from "@/lib/rewrite";
 
 type Status = DeckUnitRecord["status"];
@@ -142,7 +142,7 @@ export default function RewritePage() {
     if (queue.length === 0) return;
     stop.current = false;
     setError("");
-    const startedAt = Date.now();
+    const eta = etaTracker(queue.length);
     setRunning({ done: 0, total: queue.length, etaMs: null });
     let next = 0;
     let done = 0;
@@ -151,7 +151,7 @@ export default function RewritePage() {
         while (next < queue.length && !stop.current) {
           await generateOne(queue[next++]);
           done++;
-          setRunning({ done, total: queue.length, etaMs: estimateRemainingMs(startedAt, Date.now(), done, queue.length) });
+          setRunning({ done, total: queue.length, etaMs: eta(done) });
         }
       }),
     );

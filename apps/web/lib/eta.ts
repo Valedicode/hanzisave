@@ -5,6 +5,12 @@ export function estimateRemainingMs(startedAt: number, now: number, done: number
   return ((now - startedAt) / done) * (total - done);
 }
 
+// Starts a clock for a job of `total` items; call the result with the number done so far.
+export function etaTracker(total: number): (done: number) => number | null {
+  const startedAt = Date.now();
+  return (done) => estimateRemainingMs(startedAt, Date.now(), done, total);
+}
+
 export function formatEta(ms: number): string {
   const seconds = Math.max(1, Math.round(ms / 1000));
   if (seconds < 60) return `~${seconds} s left`;
