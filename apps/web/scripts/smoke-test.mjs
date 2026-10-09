@@ -353,4 +353,15 @@ import { join } from "node:path";
   assert.equal(r.changedFronts.length, 0);
 }
 
+// segment() with extra words: the learner's own vocabulary stays whole, levels still come from the lexicon.
+{
+  const plain = segment("叶公好龙的故事").map((w) => w.surface);
+  const withExtra = segment("叶公好龙的故事", { extra: new Set(["叶公好龙"]) });
+  assert.ok(plain.length >= 1);
+  assert.ok(withExtra.some((w) => w.surface === "叶公好龙"), "extra word should be kept whole");
+  assert.equal(withExtra.find((w) => w.surface === "叶公好龙").level, null);
+  const dianNao = segment("电脑很贵", { extra: new Set(["电脑"]) }).find((w) => w.surface === "电脑");
+  assert.equal(dianNao.level, 1); // lexicon level is kept for words that are also in the lexicon
+}
+
 console.log("smoke-test: all checks passed");
