@@ -9,6 +9,7 @@ import { getAccessCode, setAccessCode as storeAccessCode } from "@/lib/access-co
 import { checkCardFormat } from "@/lib/card-format";
 import { planComponentCards } from "@/lib/components";
 import { etaTracker, formatEta } from "@/lib/eta";
+import { addPinyinToExistingCards } from "@/lib/pinyin-backfill";
 import { lookup } from "@/lib/lexicon";
 import { loadKnownWords } from "@/lib/known-db";
 import type { Hsk30Index } from "@/lib/split-front";
@@ -35,6 +36,8 @@ const CONCURRENCY = 3;
 const COST_PER_CARD = 0.0013;
 // The one-time component backfill is offered until it has been run or skipped.
 const BACKFILL_KEY = "hanzisave.componentBackfill.v1";
+// Same idea for adding pinyin to the patterns of cards generated before that was part of the format.
+const PINYIN_KEY = "hanzisave.patternPinyin.v1";
 
 // A Back that already has every label of the card spec needs no regeneration.
 const alreadyInFormat = (u: DeckUnitRecord) => checkCardFormat(u.oldBack, u.type).ok;
@@ -57,6 +60,7 @@ export default function RewritePage() {
   const [exported, setExported] = useState("");
   const [notice, setNotice] = useState("");
   const [backfillOpen, setBackfillOpen] = useState(false);
+  const [pinyinOpen, setPinyinOpen] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const stop = useRef(false);
 
@@ -66,6 +70,7 @@ export default function RewritePage() {
       setAccessCode(getAccessCode());
       try {
         setBackfillOpen(localStorage.getItem(BACKFILL_KEY) === null);
+        setPinyinOpen(localStorage.getItem(PINYIN_KEY) === null);
       } catch {
         // storage unavailable: the step is simply not offered
       }
@@ -266,6 +271,23 @@ export default function RewritePage() {
     setBackfillOpen(false);
   };
 
+  const finishPinyin = async (apply: boolean) => {
+    if (apply) {
+      const { checked, updated } = await addPinyinToExistingCards();
+      setUnits(await db.deck_units.toArray());
+      setNotice((prev) => {
+        const message = `Added pinyin to the patterns of ${updated} of ${checked} generated cards.`;
+        return prev ? `${prev} ${message}` : message;
+      });
+    }
+    try {
+      localStorage.setItem(PINYIN_KEY, "done");
+    } catch {
+      // not remembered
+    }
+    setPinyinOpen(false);
+  };
+
   const setStatus = async (ids: number[], status: Status) => {
     if (ids.length === 0) return;
     await db.deck_units.where(":id").anyOf(ids).modify({ status });
@@ -337,6 +359,23 @@ export default function RewritePage() {
         </Link>
         <div className={styles.title}>Rewrite deck</div>
       </div>
+
+      {pinyinOpen && units.some((u) => u.newBack) && (
+        <div className={styles.panel}>
+          <div>
+            <b>One-time step.</b> Patterns now show their pinyin, like <code>注册 + 银行卡 [zhùcè + yínhángkǎ] (register a bank
+            card)</code>. Add it to the cards you have already generated. New cards get it automatically.
+          </div>
+          <div className={styles.row}>
+            <button className={styles.primary} onClick={() => finishPinyin(true)} disabled={!!running}>
+              Add pinyin to existing cards
+            </button>
+            <button className={styles.secondary} onClick={() => finishPinyin(false)} disabled={!!running}>
+              Skip
+            </button>
+          </div>
+        </div>
+      )}
 
       {backfillOpen && units.length > 0 && (
         <div className={styles.panel}>
