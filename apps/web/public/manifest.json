@@ -1,0 +1,12 @@
+{
+  "name": "HanziSave",
+  "short_name": "HanziSave",
+  "description": "Turn anything you read into flashcards at your level.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F3F7F7",
+  "theme_color": "#0E9A9A",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "192x192 512x512", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

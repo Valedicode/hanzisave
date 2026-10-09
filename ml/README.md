@@ -41,7 +41,6 @@ scripts/        one script per pipeline stage
 
 ## Next stages (not yet built)
 
-- OOV max-match fallback — jieba sometimes merges known words into one OOV token (`工作效率`, `继续下去`); greedily splitting OOV tokens into lexicon words should raise coverage noticeably. Measure before/after on the silver report.
 - `baselines.py` — lookup heuristic, linguistic features + LR/RF, LLM zero-shot
 - `eval.py` — accuracy, macro-F1 per level, QWK, MAE, OOV coverage → one table
 - `notebooks/` — Kaggle fine-tune of `hfl/chinese-macbert-base`
