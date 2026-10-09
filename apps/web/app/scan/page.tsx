@@ -32,7 +32,9 @@ export default function ScanPage() {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [cards, setCards] = useState<NewCardRecord[]>([]);
-  const [ocrBusy, setOcrBusy] = useState(false);
+  // Which button started the read, so only that one shows the spinner.
+  const [ocrSource, setOcrSource] = useState<"camera" | "upload" | null>(null);
+  const ocrBusy = ocrSource !== null;
   const [generating, setGenerating] = useState(0);
   const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
   const [error, setError] = useState("");
@@ -70,11 +72,11 @@ export default function ScanPage() {
     setCards((prev) => prev.map((c) => (c.id === id ? { ...c, ...changes } : c)));
   };
 
-  const readImage = async (file: File | undefined) => {
+  const readImage = async (file: File | undefined, source: "camera" | "upload") => {
     if (!file) return;
     setError("");
     setNeedsCode(false);
-    setOcrBusy(true);
+    setOcrSource(source);
     try {
       const blob = await resizeImage(file);
       const code = getAccessCode();
@@ -94,7 +96,7 @@ export default function ScanPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "could not read the image");
     } finally {
-      setOcrBusy(false);
+      setOcrSource(null);
     }
   };
 
@@ -229,13 +231,13 @@ export default function ScanPage() {
         />
         <div className={styles.row}>
           <label className={styles.secondary}>
-            {ocrBusy ? (
+            {ocrSource === "camera" ? (
               <>
                 <Spinner />
                 Reading image…
               </>
             ) : (
-              "Take or choose a photo"
+              "Take a photo"
             )}
             <input
               type="file"
@@ -244,7 +246,27 @@ export default function ScanPage() {
               hidden
               disabled={ocrBusy}
               onChange={(e) => {
-                readImage(e.target.files?.[0]);
+                readImage(e.target.files?.[0], "camera");
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <label className={styles.secondary}>
+            {ocrSource === "upload" ? (
+              <>
+                <Spinner />
+                Reading image…
+              </>
+            ) : (
+              "Upload an image"
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              hidden
+              disabled={ocrBusy}
+              onChange={(e) => {
+                readImage(e.target.files?.[0], "upload");
                 e.target.value = "";
               }}
             />
