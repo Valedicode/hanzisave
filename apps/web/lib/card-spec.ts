@@ -13,7 +13,7 @@ export function loadCardSpec(): string {
   if (cached) return cached;
 
   const inline = process.env.CARD_SPEC;
-  const file = process.env.CARD_SPEC_FILE ?? DEV_PATH;
+  const file = process.env.CARD_SPEC_FILE || DEV_PATH;
   let spec = inline;
   if (!spec) {
     try {
