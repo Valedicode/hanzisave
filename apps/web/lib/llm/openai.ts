@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { buildCardPrompt, cleanCardOutput } from "../card-prompt";
+import { parseReasoning } from "./reasoning";
 import { LlmError, type CardRequest, type LlmProvider } from "./types";
 
 const DEFAULT_MODEL = "gpt-5.4-mini";
@@ -22,7 +23,8 @@ function toLlmError(error: unknown): LlmError {
 
 export function createOpenAiProvider(
   client: OpenAI = new OpenAI(),
-  model: string = process.env.CARD_MODEL ?? DEFAULT_MODEL,
+  model: string = process.env.CARD_MODEL || DEFAULT_MODEL,
+  reasoning = parseReasoning(process.env.CARD_REASONING),
 ): LlmProvider {
   return {
     async generateCard(req: CardRequest, spec: string) {
@@ -33,7 +35,9 @@ export function createOpenAiProvider(
             { role: "system", content: spec },
             { role: "user", content: buildCardPrompt(req) },
           ],
-        });
+          // OpenRouter extension, not in the OpenAI SDK types; ignored by endpoints without it.
+          ...(reasoning && { reasoning }),
+        } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming);
         const text = completion.choices[0]?.message.content;
         if (!text) throw new LlmError("model returned no content", 502);
         return cleanCardOutput(text);

@@ -11,6 +11,7 @@ import { buildDeckPlan } from "../lib/deck-plan.ts";
 import { buildCardPrompt, cleanCardOutput } from "../lib/card-prompt.ts";
 import { hasAccess } from "../lib/access.ts";
 import { checkCardFormat } from "../lib/card-format.ts";
+import { parseReasoning } from "../lib/llm/reasoning.ts";
 
 // Longest-match re-merge: ICU splits 电脑 into 电+脑, lexicon has 电脑 (HSK1).
 {
@@ -153,6 +154,15 @@ import { checkCardFormat } from "../lib/card-format.ts";
   assert.ok(checkCardFormat("**Pinyin:** x", "word").problems.includes("contains markdown"));
   const grammar = checkCardFormat(word, "grammar");
   assert.ok(grammar.problems.includes("missing Pattern:") && grammar.problems.includes("grammar card needs two Example lines"));
+}
+
+// parseReasoning(): off disables, levels set effort, anything else leaves the default.
+{
+  assert.deepEqual(parseReasoning("off"), { enabled: false });
+  assert.deepEqual(parseReasoning(" Low "), { effort: "low" });
+  assert.equal(parseReasoning(""), undefined);
+  assert.equal(parseReasoning(undefined), undefined);
+  assert.equal(parseReasoning("max"), undefined);
 }
 
 console.log("smoke-test: all checks passed");
