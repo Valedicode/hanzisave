@@ -6,6 +6,9 @@ import { loadCardSpec } from "@/lib/card-spec";
 import { LlmError } from "@/lib/llm/types";
 import { provider } from "@/lib/llm/provider";
 
+// Grammar cards take up to ~8.5 s and a failed card is retried once, so allow well past the default limit.
+export const maxDuration = 60;
+
 export async function POST(req: Request) {
   if (!hasAccess(req)) {
     return NextResponse.json({ error: "invalid access code" }, { status: 401 });
