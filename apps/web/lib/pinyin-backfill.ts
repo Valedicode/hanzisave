@@ -1,3 +1,6 @@
+// TRANSITIONAL: only used by app/rewrite/transition-step.tsx. Delete both together once the
+// one-time update has been run; new cards get pattern pinyin when they are generated.
+
 import { db } from "./db";
 import { withPatternPinyin } from "./pattern-pinyin";
 

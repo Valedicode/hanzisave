@@ -9,11 +9,11 @@ import { getAccessCode, setAccessCode as storeAccessCode } from "@/lib/access-co
 import { checkCardFormat } from "@/lib/card-format";
 import { planComponentCards } from "@/lib/components";
 import { etaTracker, formatEta } from "@/lib/eta";
-import { addPinyinToExistingCards } from "@/lib/pinyin-backfill";
 import { lookup } from "@/lib/lexicon";
 import { loadKnownWords } from "@/lib/known-db";
 import type { Hsk30Index } from "@/lib/split-front";
 import { buildAnkiTsv, splitChanged } from "@/lib/rewrite";
+import { TransitionStep } from "./transition-step";
 
 type Status = DeckUnitRecord["status"];
 type Filter = Status | "all";
@@ -34,10 +34,6 @@ const BATCH = 25;
 const CONCURRENCY = 3;
 // Rough cost of one card with the default model; only used for the confirmation prompt.
 const COST_PER_CARD = 0.0013;
-// The one-time component backfill is offered until it has been run or skipped.
-const BACKFILL_KEY = "hanzisave.componentBackfill.v1";
-// Same idea for adding pinyin to the patterns of cards generated before that was part of the format.
-const PINYIN_KEY = "hanzisave.patternPinyin.v1";
 
 // A Back that already has every label of the card spec needs no regeneration.
 const alreadyInFormat = (u: DeckUnitRecord) => checkCardFormat(u.oldBack, u.type).ok;
@@ -59,8 +55,6 @@ export default function RewritePage() {
   const [editing, setEditing] = useState<{ id: number; text: string } | null>(null);
   const [exported, setExported] = useState("");
   const [notice, setNotice] = useState("");
-  const [backfillOpen, setBackfillOpen] = useState(false);
-  const [pinyinOpen, setPinyinOpen] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const stop = useRef(false);
 
@@ -68,12 +62,6 @@ export default function RewritePage() {
     db.deck_units.toArray().then((all) => {
       setUnits(all);
       setAccessCode(getAccessCode());
-      try {
-        setBackfillOpen(localStorage.getItem(BACKFILL_KEY) === null);
-        setPinyinOpen(localStorage.getItem(PINYIN_KEY) === null);
-      } catch {
-        // storage unavailable: the step is simply not offered
-      }
       setLoaded(true);
     });
   }, []);
@@ -258,36 +246,6 @@ export default function RewritePage() {
     setSelected(new Set());
   };
 
-  const finishBackfill = async (apply: boolean) => {
-    if (apply) {
-      const all = await db.deck_units.toArray();
-      await addComponentCards(all.filter((u) => !u.componentOf));
-    }
-    try {
-      localStorage.setItem(BACKFILL_KEY, "done");
-    } catch {
-      // not remembered
-    }
-    setBackfillOpen(false);
-  };
-
-  const finishPinyin = async (apply: boolean) => {
-    if (apply) {
-      const { checked, updated } = await addPinyinToExistingCards();
-      setUnits(await db.deck_units.toArray());
-      setNotice((prev) => {
-        const message = `Added pinyin to the patterns of ${updated} of ${checked} generated cards.`;
-        return prev ? `${prev} ${message}` : message;
-      });
-    }
-    try {
-      localStorage.setItem(PINYIN_KEY, "done");
-    } catch {
-      // not remembered
-    }
-    setPinyinOpen(false);
-  };
-
   const setStatus = async (ids: number[], status: Status) => {
     if (ids.length === 0) return;
     await db.deck_units.where(":id").anyOf(ids).modify({ status });
@@ -360,38 +318,15 @@ export default function RewritePage() {
         <div className={styles.title}>Rewrite deck</div>
       </div>
 
-      {pinyinOpen && units.some((u) => u.newBack) && (
-        <div className={styles.panel}>
-          <div>
-            <b>One-time step.</b> Patterns now show their pinyin, like <code>注册 + 银行卡 [zhùcè + yínhángkǎ] (register a bank
-            card)</code>. Add it to the cards you have already generated. New cards get it automatically.
-          </div>
-          <div className={styles.row}>
-            <button className={styles.primary} onClick={() => finishPinyin(true)} disabled={!!running}>
-              Add pinyin to existing cards
-            </button>
-            <button className={styles.secondary} onClick={() => finishPinyin(false)} disabled={!!running}>
-              Skip
-            </button>
-          </div>
-        </div>
-      )}
-
-      {backfillOpen && units.length > 0 && (
-        <div className={styles.panel}>
-          <div>
-            <b>One-time step.</b> Split your existing fixed expressions (like 注册银行卡) into their parts and add the
-            parts you don&apos;t have yet as new cards. From now on this happens automatically whenever cards are generated.
-          </div>
-          <div className={styles.row}>
-            <button className={styles.primary} onClick={() => finishBackfill(true)} disabled={!!running}>
-              Create component cards now
-            </button>
-            <button className={styles.secondary} onClick={() => finishBackfill(false)} disabled={!!running}>
-              Skip
-            </button>
-          </div>
-        </div>
+      {loaded && units.length > 0 && (
+        <TransitionStep
+          busy={!!running}
+          addComponents={() => addComponentCards(units.filter((u) => !u.componentOf))}
+          onDone={async (message) => {
+            setUnits(await db.deck_units.toArray());
+            setNotice((prev) => (prev ? `${prev} ${message}` : message));
+          }}
+        />
       )}
 
       <div className={styles.panel}>
