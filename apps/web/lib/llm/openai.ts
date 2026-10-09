@@ -1,7 +1,9 @@
 import OpenAI from "openai";
 import { buildCardPrompt, cleanCardOutput } from "../card-prompt";
+import { GLOSS_SYSTEM, buildGlossPrompt, parseGloss } from "../gloss-prompt";
 import { OCR_PROMPT } from "../ocr-prompt";
 import { parseReasoning } from "./reasoning";
+import type { GlossRequest } from "../gloss-schema";
 import { LlmError, type CardRequest, type ImageInput, type LlmProvider } from "./types";
 
 const DEFAULT_MODEL = "gpt-5.4-mini";
@@ -46,6 +48,27 @@ export function createOpenAiProvider(
       } catch (error) {
         throw error instanceof LlmError ? error : toLlmError(error);
       }
+    },
+    async generateGloss(req: GlossRequest) {
+      // One retry: an open-weight model now and then wraps the JSON in prose or breaks it.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const completion = await client.chat.completions.create({
+            model,
+            max_tokens: 600,
+            messages: [
+              { role: "system", content: GLOSS_SYSTEM },
+              { role: "user", content: buildGlossPrompt(req) },
+            ],
+            ...(reasoning && { reasoning }),
+          } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming);
+          const gloss = parseGloss(completion.choices[0]?.message.content ?? "");
+          if (gloss) return gloss;
+        } catch (error) {
+          throw error instanceof LlmError ? error : toLlmError(error);
+        }
+      }
+      throw new LlmError("model returned an unusable gloss", 502);
     },
     async extractText(image: ImageInput) {
       try {

@@ -2,7 +2,7 @@
 
 import { splitSentences } from "./analyze";
 import { lookup, type HskLevel } from "./lexicon";
-import { segment } from "./segment";
+import { segment, type Word } from "./segment";
 
 export interface NewWord {
   surface: string;
@@ -43,6 +43,40 @@ function isTransparent(surface: string, known: ReadonlySet<string>, levelFloor: 
   return true;
 }
 
+// The one rule for "the learner already has this word", shared by the new-word list and the reading view.
+function isKnownWord(word: Word, known: ReadonlySet<string>, levelFloor: number): boolean {
+  return (
+    known.has(word.surface) ||
+    (word.level !== null && word.level <= levelFloor) ||
+    (word.level === null && isTransparent(word.surface, known, levelFloor))
+  );
+}
+
+export type WordStatus = "new" | "known" | "other"; // other: punctuation, digits, Latin text
+
+export interface MarkedWord {
+  surface: string;
+  level: HskLevel | null;
+  status: WordStatus;
+}
+
+export interface MarkedSentence {
+  text: string;
+  words: MarkedWord[];
+}
+
+// The text broken into sentences and words, each marked new or known, for showing it as it was read.
+export function markText(text: string, { known, levelFloor = 0 }: ScanOptions): MarkedSentence[] {
+  return splitSentences(text).map((sentence) => ({
+    text: sentence,
+    words: segment(sentence, { extra: known }).map((word) => ({
+      surface: word.surface,
+      level: word.level,
+      status: !ALL_HAN.test(word.surface) ? "other" : isKnownWord(word, known, levelFloor) ? "known" : "new",
+    })),
+  }));
+}
+
 export function scanText(text: string, { known, levelFloor = 0 }: ScanOptions): ScanResult {
   const found = new Map<string, NewWord>();
   let totalWords = 0;
@@ -52,11 +86,7 @@ export function scanText(text: string, { known, levelFloor = 0 }: ScanOptions): 
     for (const word of segment(sentence, { extra: known })) {
       if (!ALL_HAN.test(word.surface)) continue;
       totalWords++;
-      if (
-        known.has(word.surface) ||
-        (word.level !== null && word.level <= levelFloor) ||
-        (word.level === null && isTransparent(word.surface, known, levelFloor))
-      ) {
+      if (isKnownWord(word, known, levelFloor)) {
         knownWords++;
         continue;
       }

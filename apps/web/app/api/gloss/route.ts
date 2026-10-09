@@ -1,46 +1,27 @@
-import OpenAI from "openai";
-import { zodResponseFormat } from "openai/helpers/zod";
 import { NextResponse } from "next/server";
-import { GlossSchema, type GlossRequest } from "@/lib/gloss-schema";
+import { hasAccess } from "@/lib/access";
+import { LlmError } from "@/lib/llm/types";
+import { provider } from "@/lib/llm/provider";
 
-const client = new OpenAI();
+export const maxDuration = 30;
 
 export async function POST(req: Request) {
-  const body = (await req.json()) as Partial<GlossRequest>;
-  const { word, sentence } = body;
+  if (!hasAccess(req)) {
+    return NextResponse.json({ error: "invalid access code" }, { status: 401 });
+  }
+
+  const body = (await req.json().catch(() => null)) as { word?: unknown; sentence?: unknown } | null;
+  const word = typeof body?.word === "string" ? body.word.trim() : "";
+  const sentence = typeof body?.sentence === "string" ? body.sentence.trim().slice(0, 400) : "";
   if (!word || !sentence) {
     return NextResponse.json({ error: "word and sentence are required" }, { status: 400 });
   }
 
   try {
-    const completion = await client.chat.completions.parse({
-      model: "gpt-5.4-mini",
-      messages: [
-        {
-          role: "user",
-          content: `Chinese sentence: ${sentence}\nWord to gloss: ${word}\nGive the pinyin, a short English gloss for this word as used in this sentence, and one new short example sentence using the word.`,
-        },
-      ],
-      response_format: zodResponseFormat(GlossSchema, "gloss"),
-    });
-
-    const parsed = completion.choices[0]?.message.parsed;
-    if (!parsed) {
-      return NextResponse.json({ error: "model returned no parsable output" }, { status: 502 });
-    }
-    return NextResponse.json(parsed);
+    return NextResponse.json(await provider.generateGloss({ word, sentence }));
   } catch (error) {
-    if (error instanceof OpenAI.AuthenticationError) {
-      return NextResponse.json({ error: "OPENAI_API_KEY is missing or invalid" }, { status: 401 });
-    }
-    if (error instanceof OpenAI.RateLimitError) {
-      return NextResponse.json({ error: "rate limited, try again shortly" }, { status: 429 });
-    }
-    if (error instanceof OpenAI.BadRequestError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-    if (error instanceof OpenAI.APIError) {
-      return NextResponse.json({ error: error.message }, { status: error.status ?? 502 });
+    if (error instanceof LlmError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error("gloss request failed:", error);
     return NextResponse.json({ error: "gloss request failed" }, { status: 500 });

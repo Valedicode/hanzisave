@@ -8,7 +8,6 @@ const LINKS = [
   { href: "/scan", label: "Scan" },
   { href: "/rewrite", label: "Rewrite deck" },
   { href: "/import", label: "Import" },
-  { href: "/analyze", label: "Analyze" },
 ];
 
 // Links in a row on wide screens; on a phone they sit behind a hamburger button, so none are lost.
