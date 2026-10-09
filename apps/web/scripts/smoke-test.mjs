@@ -12,6 +12,7 @@ import { buildCardPrompt, cleanCardOutput } from "../lib/card-prompt.ts";
 import { hasAccess } from "../lib/access.ts";
 import { checkCardFormat } from "../lib/card-format.ts";
 import { parseReasoning } from "../lib/llm/reasoning.ts";
+import { generateValidCard } from "../lib/card-service.ts";
 
 // Longest-match re-merge: ICU splits 电脑 into 电+脑, lexicon has 电脑 (HSK1).
 {
@@ -165,6 +166,19 @@ import { parseReasoning } from "../lib/llm/reasoning.ts";
   assert.equal(parseReasoning(""), undefined);
   assert.equal(parseReasoning(undefined), undefined);
   assert.equal(parseReasoning("max"), undefined);
+}
+
+// generateValidCard(): retries once on an unusable card, then reports the problems.
+{
+  const NL = String.fromCharCode(10);
+  const good = ["Pinyin: a", "Jyutping: b", "Used in Cantonese: No", "Part of speech: Verb", "Register: Neutral", "Translation: t", "Patterns:", "- p", "Example: e"].join(NL);
+  const bad = good.replace("Translation: t", "Translation: unsure");
+  const seq = (...outs) => { let i = 0; return { generateCard: async () => outs[Math.min(i++, outs.length - 1)] }; };
+  const req = { item: "x", type: "word" };
+  assert.deepEqual(await generateValidCard(seq(bad, good), req, "spec"), { ok: true, back: good });
+  const failed = await generateValidCard(seq(bad), req, "spec");
+  assert.equal(failed.ok, false);
+  assert.deepEqual(failed.problems, ["Translation: is unsure"]);
 }
 
 console.log("smoke-test: all checks passed");
