@@ -12,6 +12,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  padding-right: 44px; /* room for the theme button in the corner */
 }
 
 .logo {
