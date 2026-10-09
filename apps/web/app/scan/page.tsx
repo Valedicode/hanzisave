@@ -25,7 +25,8 @@ const LEVEL_COLOR: Record<number, string> = {
 
 export default function ScanPage() {
   const [text, setText] = useState("");
-  const [levelFloor, setLevelFloor] = useState(0);
+  // HSK 1-2 words are hidden by default; the deck's basics aren't all in Anki, and they are noise.
+  const [levelFloor, setLevelFloor] = useState(2);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [cards, setCards] = useState<NewCardRecord[]>([]);
@@ -43,7 +44,8 @@ export default function ScanPage() {
       .then((all) => {
         setCards(all);
         try {
-          setLevelFloor(Number(localStorage.getItem(FLOOR_KEY) ?? 0) || 0);
+          const stored = localStorage.getItem(FLOOR_KEY);
+          if (stored !== null) setLevelFloor(Number(stored) || 0);
         } catch {
           // not remembered
         }
