@@ -1,0 +1,105 @@
+.nav {
+  position: relative;
+}
+
+.links {
+  display: flex;
+  gap: 4px;
+  list-style: none;
+}
+
+.links a {
+  display: block;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink2);
+}
+
+.links a:hover,
+.links a:focus-visible {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.links a:focus-visible,
+.button:focus-visible {
+  outline: 3px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* The button only exists on phones. */
+.button {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  cursor: pointer;
+}
+
+.bar {
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ink2);
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.barTop {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.barMid {
+  opacity: 0;
+}
+
+.barBottom {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+@media (max-width: 720px) {
+  .button {
+    display: flex;
+  }
+
+  .links {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 40;
+    min-width: 190px;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+  }
+
+  .open {
+    display: flex;
+  }
+
+  .links a {
+    padding: 12px 14px;
+    font-size: 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    transition: none;
+  }
+}
