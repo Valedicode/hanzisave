@@ -8,7 +8,7 @@ const rows = z.array(z.record(z.string(), z.unknown()));
 const DeckUnitRow = z.looseObject({
   front: z.string(),
   oldBack: z.string(),
-  status: z.enum(["pending", "generated", "approved", "skipped", "failed"]),
+  status: z.enum(["pending", "generated", "approved", "skipped", "failed", "in_format", "confirmed"]),
 });
 
 const KnownRow = z.looseObject({ key: z.string(), item: z.string() });

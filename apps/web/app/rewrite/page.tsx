@@ -6,6 +6,8 @@ import styles from "./rewrite.module.css";
 import { db, type DeckUnitRecord } from "@/lib/db";
 import { CardRequestError, requestCard } from "@/lib/card-client";
 import { getAccessCode, setAccessCode as storeAccessCode } from "@/lib/access-code";
+import { checkCardFormat } from "@/lib/card-format";
+import { estimateRemainingMs, formatEta } from "@/lib/eta";
 import { buildAnkiTsv, splitChanged } from "@/lib/rewrite";
 
 type Status = DeckUnitRecord["status"];
@@ -14,7 +16,9 @@ type Filter = Status | "all";
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "pending", label: "Pending" },
   { key: "generated", label: "To review" },
+  { key: "in_format", label: "Already in format" },
   { key: "approved", label: "Approved" },
+  { key: "confirmed", label: "Confirmed" },
   { key: "failed", label: "Failed" },
   { key: "skipped", label: "Skipped" },
   { key: "all", label: "All" },
@@ -23,6 +27,11 @@ const FILTERS: { key: Filter; label: string }[] = [
 const PAGE_SIZE = 15;
 const BATCH = 25;
 const CONCURRENCY = 3;
+// Rough cost of one card with the default model; only used for the confirmation prompt.
+const COST_PER_CARD = 0.0013;
+
+// A Back that already has every label of the card spec needs no regeneration.
+const alreadyInFormat = (u: DeckUnitRecord) => checkCardFormat(u.oldBack, u.type).ok;
 
 // Cards that have a rewrite waiting for approval.
 const approvable = (u: DeckUnitRecord) => !!u.newBack && u.status !== "approved";
@@ -36,10 +45,11 @@ export default function RewritePage() {
   const [page, setPage] = useState(0);
   const [query, setQuery] = useState("");
   const [accessCode, setAccessCode] = useState("");
-  const [running, setRunning] = useState<{ done: number; total: number } | null>(null);
+  const [running, setRunning] = useState<{ done: number; total: number; etaMs: number | null } | null>(null);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<{ id: number; text: string } | null>(null);
   const [exported, setExported] = useState("");
+  const [notice, setNotice] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const stop = useRef(false);
 
@@ -57,7 +67,16 @@ export default function RewritePage() {
   };
 
   const counts = useMemo(() => {
-    const c: Record<Filter, number> = { pending: 0, generated: 0, approved: 0, failed: 0, skipped: 0, all: units.length };
+    const c: Record<Filter, number> = {
+      pending: 0,
+      generated: 0,
+      approved: 0,
+      failed: 0,
+      skipped: 0,
+      in_format: 0,
+      confirmed: 0,
+      all: units.length,
+    };
     for (const u of units) c[u.status]++;
     return c;
   }, [units]);
@@ -87,6 +106,8 @@ export default function RewritePage() {
   const selectedToApprove = selectedCards.filter(bulkApprovable).map((u) => u.id!);
   const selectedToGenerate = selectedCards.filter((u) => u.status !== "approved");
   const selectedOverwrites = selectedToGenerate.filter((u) => u.newBack).length;
+  const toConfirmAll = units.filter((u) => u.status === "in_format").map((u) => u.id!);
+  const selectedToConfirm = selectedCards.filter((u) => u.status === "in_format").map((u) => u.id!);
 
   const generateOne = async (u: DeckUnitRecord) => {
     try {
@@ -103,28 +124,71 @@ export default function RewritePage() {
     }
   };
 
+  // Free step before any generation: cards whose existing Back already follows the spec are
+  // not regenerated. They move to "Already in format" so a human can check the call.
+  const sortOutFormatted = async (queue: DeckUnitRecord[]) => {
+    const formatted = queue.filter(alreadyInFormat);
+    await Promise.all(formatted.map((u) => patch(u.id!, { status: "in_format" })));
+    const skip = new Set(formatted.map((u) => u.id));
+    setNotice(
+      formatted.length > 0
+        ? `${formatted.length} cards already follow the new format and were not regenerated. Check them under "Already in format".`
+        : "",
+    );
+    return queue.filter((u) => !skip.has(u.id));
+  };
+
   const runQueue = async (queue: DeckUnitRecord[]) => {
     if (queue.length === 0) return;
     stop.current = false;
     setError("");
-    setRunning({ done: 0, total: queue.length });
+    const startedAt = Date.now();
+    setRunning({ done: 0, total: queue.length, etaMs: null });
     let next = 0;
     let done = 0;
     await Promise.all(
       Array.from({ length: CONCURRENCY }, async () => {
         while (next < queue.length && !stop.current) {
           await generateOne(queue[next++]);
-          setRunning({ done: ++done, total: queue.length });
+          done++;
+          setRunning({ done, total: queue.length, etaMs: estimateRemainingMs(startedAt, Date.now(), done, queue.length) });
         }
       }),
     );
     setRunning(null);
   };
 
-  const generateBatch = () => runQueue(units.filter((u) => u.status === "pending").slice(0, BATCH));
+  const pendingCards = () => units.filter((u) => u.status === "pending");
 
+  const generateBatch = async () => runQueue((await sortOutFormatted(pendingCards())).slice(0, BATCH));
+
+  // Step 1 is the free format check: cards already in the new format are set aside.
+  // Step 2 asks before spending anything, with the real number left to generate.
+  const generateAll = async () => {
+    const before = pendingCards().length;
+    const remaining = await sortOutFormatted(pendingCards());
+    if (remaining.length === 0) return;
+    const ok = window.confirm(
+      `${before - remaining.length} cards were already in the new format and set aside. ` +
+        `Generate the other ${remaining.length}? Estimated cost about $${(remaining.length * COST_PER_CARD).toFixed(2)}.`,
+    );
+    if (ok) await runQueue(remaining);
+  };
+
+  // Cards the user picked explicitly are generated even if they look formatted;
+  // only pending ones go through the format check first.
   const generateSelectedCards = async () => {
-    await runQueue(selectedToGenerate);
+    const pending = selectedToGenerate.filter((u) => u.status === "pending");
+    const forced = selectedToGenerate.filter((u) => u.status !== "pending");
+    await runQueue([...(await sortOutFormatted(pending)), ...forced]);
+    setSelected(new Set());
+  };
+
+  const setStatus = async (ids: number[], status: Status) => {
+    if (ids.length === 0) return;
+    await db.deck_units.where(":id").anyOf(ids).modify({ status });
+    const done = new Set(ids);
+    setUnits((prev) => prev.map((u) => (u.id !== undefined && done.has(u.id) ? { ...u, status } : u)));
     setSelected(new Set());
   };
 
@@ -195,7 +259,12 @@ export default function RewritePage() {
       <div className={styles.panel}>
         <div className={styles.row}>
           <button className={styles.primary} onClick={generateBatch} disabled={!!running || counts.pending === 0}>
-            {running ? `Generating ${running.done}/${running.total}…` : `Generate next ${Math.min(BATCH, counts.pending)}`}
+            {running
+              ? `Generating ${running.done}/${running.total}${running.etaMs !== null ? ` · ${formatEta(running.etaMs)}` : ""}…`
+              : `Generate next ${Math.min(BATCH, counts.pending)}`}
+          </button>
+          <button className={styles.secondary} onClick={generateAll} disabled={!!running || counts.pending === 0}>
+            Generate all {counts.pending}
           </button>
           {running && (
             <button className={styles.secondary} onClick={() => (stop.current = true)}>
@@ -208,6 +277,7 @@ export default function RewritePage() {
           </label>
         </div>
         {error && <div className={styles.error}>{error}</div>}
+        {notice && <div className={styles.hint}>{notice}</div>}
         <div className={styles.row}>
           <button className={styles.secondary} onClick={exportApproved} disabled={counts.approved === 0}>
             Export {counts.approved} approved as Anki file
@@ -287,6 +357,20 @@ export default function RewritePage() {
               Approve all {approvableAll.length}
             </button>
           )}
+          {toConfirmAll.length > 0 && (
+            <>
+              <button
+                className={styles.primary}
+                disabled={selectedToConfirm.length === 0}
+                onClick={() => setStatus(selectedToConfirm, "confirmed")}
+              >
+                Confirm selected ({selectedToConfirm.length})
+              </button>
+              <button className={styles.secondary} onClick={() => setStatus(toConfirmAll, "confirmed")}>
+                Confirm all {toConfirmAll.length} in format
+              </button>
+            </>
+          )}
           {selectedCards.length > 0 && (
             <button className={styles.secondary} onClick={() => setSelected(new Set())}>
               Clear selection
@@ -335,7 +419,11 @@ export default function RewritePage() {
                 <pre className={styles.pre}>{u.newBack}</pre>
               ) : (
                 <div className={styles.muted}>
-                  {u.status === "failed" ? (u.problems ?? []).join("; ") : "Not generated yet"}
+                  {u.status === "failed"
+                    ? (u.problems ?? []).join("; ")
+                    : u.status === "in_format" || u.status === "confirmed"
+                      ? "Not regenerated: the existing Back already follows the card format."
+                      : "Not generated yet"}
                 </div>
               )}
               {u.changed && <div className={styles.warn}>Model says it corrected: {u.changed}</div>}
@@ -360,6 +448,16 @@ export default function RewritePage() {
               </>
             ) : (
               <>
+                {u.status === "in_format" && (
+                  <button className={styles.primary} onClick={() => patch(u.id!, { status: "confirmed" })}>
+                    Looks right
+                  </button>
+                )}
+                {u.status === "confirmed" && (
+                  <button className={styles.secondary} onClick={() => patch(u.id!, { status: "in_format" })}>
+                    Re-check
+                  </button>
+                )}
                 {u.newBack && u.status !== "approved" && (
                   <button className={styles.primary} onClick={() => patch(u.id!, { status: "approved" })}>
                     Approve
@@ -371,7 +469,7 @@ export default function RewritePage() {
                   </button>
                 )}
                 <button className={styles.secondary} onClick={() => regenerate(u)} disabled={!!running}>
-                  {u.newBack ? "Regenerate" : "Generate"}
+                  {u.newBack ? "Regenerate" : u.status === "in_format" || u.status === "confirmed" ? "Generate anyway" : "Generate"}
                 </button>
                 {u.status !== "skipped" && (
                   <button className={styles.secondary} onClick={() => patch(u.id!, { status: "skipped" })}>

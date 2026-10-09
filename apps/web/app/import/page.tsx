@@ -259,6 +259,7 @@ export default function ImportPage() {
             <span className={styles.chip}>{merge.unchanged} unchanged</span>
             <span className={styles.chip}>{merge.changedFronts.length} changed in Anki</span>
             <span className={styles.chip}>{merge.staleFronts.length} rewrites out of date</span>
+            <span className={styles.chip}>{merge.importedFronts.length} of your rewrites found in Anki</span>
             <span className={styles.chip}>{merge.missingFronts.length} no longer in Anki</span>
           </div>
           {merge.addedFronts.length > 0 && <p className={styles.hint}>New: {merge.addedFronts.slice(0, 20).join(", ")}</p>}
