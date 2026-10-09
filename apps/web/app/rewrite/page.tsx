@@ -7,6 +7,7 @@ import { db, type DeckUnitRecord } from "@/lib/db";
 import { CardRequestError, requestCard } from "@/lib/card-client";
 import { getAccessCode } from "@/lib/access-code";
 import { AccessNotice } from "../access-notice";
+import { Spinner } from "../spinner";
 import { checkCardFormat } from "@/lib/card-format";
 import { planComponentCards } from "@/lib/components";
 import { etaTracker, formatEta } from "@/lib/eta";
@@ -51,6 +52,7 @@ export default function RewritePage() {
   const [page, setPage] = useState(0);
   const [query, setQuery] = useState("");
   const [needsCode, setNeedsCode] = useState(false);
+  const [busyId, setBusyId] = useState<number | null>(null);
   const [running, setRunning] = useState<{ done: number; total: number; etaMs: number | null } | null>(null);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<{ id: number; text: string } | null>(null);
@@ -273,7 +275,12 @@ export default function RewritePage() {
 
   const regenerate = async (u: DeckUnitRecord) => {
     setError("");
-    await generateOne(u);
+    setBusyId(u.id!);
+    try {
+      await generateOne(u);
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const exportApproved = () => {
@@ -329,9 +336,14 @@ export default function RewritePage() {
       <div className={styles.panel}>
         <div className={styles.row}>
           <button className={styles.primary} onClick={generateBatch} disabled={!!running || counts.pending === 0}>
-            {running
-              ? `Generating ${running.done}/${running.total}${running.etaMs !== null ? ` · ${formatEta(running.etaMs)}` : ""}…`
-              : `Generate next ${Math.min(BATCH, counts.pending)}`}
+            {running ? (
+              <>
+                <Spinner />
+                {`Generating ${running.done}/${running.total}${running.etaMs !== null ? ` · ${formatEta(running.etaMs)}` : ""}…`}
+              </>
+            ) : (
+              `Generate next ${Math.min(BATCH, counts.pending)}`
+            )}
           </button>
           <button className={styles.secondary} onClick={generateAll} disabled={!!running || counts.pending === 0}>
             Generate all {counts.pending}
@@ -534,7 +546,8 @@ export default function RewritePage() {
                     Edit
                   </button>
                 )}
-                <button className={styles.secondary} onClick={() => regenerate(u)} disabled={!!running}>
+                <button className={styles.secondary} onClick={() => regenerate(u)} disabled={!!running || busyId !== null}>
+                  {busyId === u.id && <Spinner />}
                   {u.newBack ? "Regenerate" : u.status === "in_format" || u.status === "confirmed" ? "Generate anyway" : "Generate"}
                 </button>
                 {u.status !== "skipped" && (
