@@ -152,6 +152,8 @@ import { parseReasoning } from "../lib/llm/reasoning.ts";
   const broken = checkCardFormat(word.replace("Jyutping: daa2 ce1" + NL, ""), "word");
   assert.deepEqual(broken.problems, ["missing Jyutping:"]);
   assert.ok(checkCardFormat("**Pinyin:** x", "word").problems.includes("contains markdown"));
+  const gaveUp = checkCardFormat(word.replace("Translation: to take a taxi", "Translation: unsure"), "word");
+  assert.deepEqual(gaveUp.problems, ["Translation: is unsure"]);
   const grammar = checkCardFormat(word, "grammar");
   assert.ok(grammar.problems.includes("missing Pattern:") && grammar.problems.includes("grammar card needs two Example lines"));
 }
