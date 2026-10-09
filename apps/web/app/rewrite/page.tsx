@@ -70,11 +70,14 @@ export default function RewritePage() {
   const shown = useMemo(() => units.filter((u) => filter === "all" || u.status === filter), [units, filter]);
   const pageCount = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
   const visible = shown.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const visibleApprovable = visible.filter(bulkApprovable).map((u) => u.id!);
-  const allVisibleSelected = visibleApprovable.length > 0 && visibleApprovable.every((id) => selected.has(id));
+  const visibleIds = visible.map((u) => u.id!);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
   const approvableAll = units.filter(bulkApprovable).map((u) => u.id!);
-  // Selection can go stale (a card approved, skipped or edited elsewhere), so count only live ones.
-  const selectedIds = approvableAll.filter((id) => selected.has(id));
+  // Any card can be selected; each action then applies to the selected cards it makes sense for.
+  const selectedCards = units.filter((u) => selected.has(u.id!));
+  const selectedToApprove = selectedCards.filter(bulkApprovable).map((u) => u.id!);
+  const selectedToGenerate = selectedCards.filter((u) => u.status !== "approved");
+  const selectedOverwrites = selectedToGenerate.filter((u) => u.newBack).length;
 
   const generateOne = async (u: DeckUnitRecord) => {
     try {
@@ -91,8 +94,7 @@ export default function RewritePage() {
     }
   };
 
-  const generateBatch = async () => {
-    const queue = units.filter((u) => u.status === "pending").slice(0, BATCH);
+  const runQueue = async (queue: DeckUnitRecord[]) => {
     if (queue.length === 0) return;
     stop.current = false;
     setError("");
@@ -108,6 +110,13 @@ export default function RewritePage() {
       }),
     );
     setRunning(null);
+  };
+
+  const generateBatch = () => runQueue(units.filter((u) => u.status === "pending").slice(0, BATCH));
+
+  const generateSelectedCards = async () => {
+    await runQueue(selectedToGenerate);
+    setSelected(new Set());
   };
 
   const approveIds = async (ids: number[]) => {
@@ -213,17 +222,17 @@ export default function RewritePage() {
         ))}
       </div>
 
-      {approvableAll.length > 0 && (
+      {units.length > 0 && (
         <div className={styles.row}>
           <label className={styles.check}>
             <input
               type="checkbox"
               checked={allVisibleSelected}
-              disabled={visibleApprovable.length === 0}
+              disabled={visibleIds.length === 0}
               onChange={() =>
                 setSelected((prev) => {
                   const next = new Set(prev);
-                  for (const id of visibleApprovable) {
+                  for (const id of visibleIds) {
                     if (allVisibleSelected) next.delete(id);
                     else next.add(id);
                   }
@@ -233,16 +242,34 @@ export default function RewritePage() {
             />
             Select all on this page
           </label>
+          <span className={styles.hint}>{selectedCards.length} selected</span>
           <button
             className={styles.primary}
-            disabled={selectedIds.length === 0}
-            onClick={() => approveIds(selectedIds)}
+            disabled={selectedToGenerate.length === 0 || !!running}
+            onClick={generateSelectedCards}
           >
-            Approve selected ({selectedIds.length})
+            Generate selected ({selectedToGenerate.length})
           </button>
-          <button className={styles.secondary} onClick={() => approveIds(approvableAll)}>
-            Approve all {approvableAll.length}
+          <button
+            className={styles.primary}
+            disabled={selectedToApprove.length === 0}
+            onClick={() => approveIds(selectedToApprove)}
+          >
+            Approve selected ({selectedToApprove.length})
           </button>
+          {approvableAll.length > 0 && (
+            <button className={styles.secondary} onClick={() => approveIds(approvableAll)}>
+              Approve all {approvableAll.length}
+            </button>
+          )}
+          {selectedCards.length > 0 && (
+            <button className={styles.secondary} onClick={() => setSelected(new Set())}>
+              Clear selection
+            </button>
+          )}
+          {selectedOverwrites > 0 && (
+            <span className={styles.warn}>Generating replaces the existing rewrite on {selectedOverwrites} of them.</span>
+          )}
         </div>
       )}
 
@@ -251,14 +278,12 @@ export default function RewritePage() {
         return (
         <div key={u.id} className={styles.card}>
           <div className={styles.cardHead}>
-            {bulkApprovable(u) && (
-              <input
-                type="checkbox"
-                aria-label={`Select ${u.front}`}
-                checked={selected.has(u.id!)}
-                onChange={() => toggleSelected(u.id!)}
-              />
-            )}
+            <input
+              type="checkbox"
+              aria-label={`Select ${u.front}`}
+              checked={selected.has(u.id!)}
+              onChange={() => toggleSelected(u.id!)}
+            />
             <span className={styles.front}>{u.front}</span>
             <span className={styles.badge}>{u.type}</span>
             <span className={styles.badge}>was {u.format}</span>
