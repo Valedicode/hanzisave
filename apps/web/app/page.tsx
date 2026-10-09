@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AccessCodeForm } from "./access-code-form";
+import { NavMenu } from "./nav-menu";
 import styles from "./landing.module.css";
 
 const HSK_LEGEND = [
@@ -37,12 +38,7 @@ export default function Landing() {
           <span className={styles.logo}>汉</span>
           <span className={styles.brandName}>HanziSave</span>
         </Link>
-        <nav className={styles.nav} aria-label="Main">
-          <Link href="/scan">Scan</Link>
-          <Link href="/rewrite">Rewrite deck</Link>
-          <Link href="/import">Import</Link>
-          <Link href="/analyze">Analyze</Link>
-        </nav>
+        <NavMenu />
       </header>
 
       <main>

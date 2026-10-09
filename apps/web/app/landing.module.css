@@ -42,25 +42,6 @@
   letter-spacing: -0.01em;
 }
 
-.nav {
-  display: flex;
-  gap: 4px;
-}
-
-.nav a {
-  padding: 8px 12px;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 800;
-  color: var(--ink2);
-}
-
-.nav a:hover,
-.nav a:focus-visible {
-  background: var(--hover);
-  color: var(--ink);
-}
-
 /* Hero */
 .hero {
   display: flex;
@@ -215,8 +196,7 @@
 }
 
 .primary:focus-visible,
-.link:focus-visible,
-.nav a:focus-visible {
+.link:focus-visible {
   outline: 3px solid var(--brand);
   outline-offset: 3px;
 }
@@ -324,10 +304,6 @@
 @media (max-width: 720px) {
   .header {
     padding: 14px 68px 14px 20px;
-  }
-
-  .nav a:nth-child(n + 3) {
-    display: none;
   }
 
   .steps {
