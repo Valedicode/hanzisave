@@ -516,6 +516,10 @@ import { join } from "node:path";
   const real = await withPatternPinyin(["Patterns:", "- 打车 + 去 + 地点 (take a taxi)", "- 绑定 + 银行卡 (link a bank card)"].join(NL));
   assert.equal(real.split(NL)[1], "- 打车 + 去 + 地点 [dǎchē + qù + dìdiǎn] (take a taxi)");
   assert.equal(real.split(NL)[2], "- 绑定 + 银行卡 [bǎngdìng + yínhángkǎ] (link a bank card)");
+  // several words in one run are spaced like words elsewhere on the card
+  const multi = await withPatternPinyin(["Patterns:", "- 做某事 + 很热闹 (x)", "- 用语言 + 表达 (y)"].join(NL));
+  assert.equal(multi.split(NL)[1], "- 做某事 + 很热闹 [zuò mǒushì + hěn rènào] (x)");
+  assert.equal(multi.split(NL)[2], "- 用语言 + 表达 [yòng yǔyán + biǎodá] (y)");
 }
 
 console.log("smoke-test: all checks passed");

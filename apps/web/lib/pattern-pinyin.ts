@@ -5,6 +5,8 @@
 // Pinyin goes in square brackets so the English gloss keeps its parentheses. The pinyin is
 // computed, not asked of the model, so it is the same for old and new cards and costs nothing.
 
+import { segment } from "./segment";
+
 // Grammar particles standing alone in a pattern take their grammatical reading; a
 // converter reads them in isolation (了 as liǎo, 得 as dé), which is wrong here.
 const PARTICLES: Record<string, string> = {
@@ -60,8 +62,28 @@ export function addPatternPinyin(back: string, toPinyin: HanToPinyin): string {
     .join("\n");
 }
 
+// A run of hanzi can hold several words (很热闹, 做某事). Pinyin goes with a space between
+// words and none inside one, as on the rest of the card: hěn rènào, zuò mǒushì. Words the
+// segmenter doesn't know come back as single characters, so neighbouring ones are joined.
+function wordsOf(run: string): string[] {
+  const words: string[] = [];
+  let singles = "";
+  for (const { surface } of segment(run)) {
+    if (surface.length === 1) {
+      singles += surface;
+      continue;
+    }
+    if (singles) words.push(singles);
+    singles = "";
+    words.push(surface);
+  }
+  if (singles) words.push(singles);
+  return words;
+}
+
 // The converter is loaded on demand: its dictionary is large and only needed when a card is made.
 export async function withPatternPinyin(back: string): Promise<string> {
   const { pinyin } = await import("pinyin-pro");
-  return addPatternPinyin(back, (run) => pinyin(run, { toneType: "symbol", type: "array" }).join(""));
+  const word = (w: string) => pinyin(w, { toneType: "symbol", type: "array" }).join("");
+  return addPatternPinyin(back, (run) => wordsOf(run).map(word).join(" "));
 }
