@@ -16,6 +16,8 @@ export interface DeckUnit {
   tags: string;
   sourceRow: number;
   splitFrom?: string; // original combined front, when this card came from a split
+  ankiNoteId?: number;
+  ankiGuid?: string;
 }
 
 export interface KnownItem {
@@ -50,7 +52,14 @@ export function buildDeckPlan(
     const action = split.action === "none" ? "none" : (override ?? split.action);
     notes.push({ note, split, action });
 
-    const base = { format: note.format, oldBack: note.backText, tags: note.tags, sourceRow: note.row };
+    const base = {
+      format: note.format,
+      oldBack: note.backText,
+      tags: note.tags,
+      sourceRow: note.row,
+      ankiNoteId: note.ankiNoteId,
+      ankiGuid: note.ankiGuid,
+    };
     const noteType: CardType = typeOverrides.get(note.row) ?? (note.isGrammar ? "grammar" : "word");
 
     if (action === "split") {

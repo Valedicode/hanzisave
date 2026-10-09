@@ -49,10 +49,14 @@ export interface DeckUnitRecord {
   tags: string;
   sourceRow: number;
   splitFrom?: string;
+  ankiNoteId?: number; // Anki note id when imported from an .apkg
+  ankiGuid?: string;
   status: "pending" | "generated" | "approved" | "skipped" | "failed";
   newBack?: string; // rewritten Back in the card spec format
   changed?: string; // factual correction the model reported, for review
   problems?: string[]; // why generation failed
+  stale?: boolean; // the source note changed in Anki after this rewrite was made
+  missing?: boolean; // no longer present in the latest Anki export
   createdAt: number;
 }
 

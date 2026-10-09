@@ -13,6 +13,8 @@ export interface ImportedNote {
   format: NoteFormat;
   backText: string; // Back with <br> -> \n, tags stripped, entities decoded
   tags: string;
+  ankiNoteId?: number; // present when imported from an .apkg; what review history hangs off
+  ankiGuid?: string;
 }
 
 export interface ParsedDeck {
@@ -119,6 +121,45 @@ export function splitFront(front: string): { parts: string[]; kind: SplitKind } 
   return { parts, kind: variant ? "variant" : "pair" };
 }
 
+function toImportedNote(
+  row: number,
+  frontRaw: string,
+  backRaw: string,
+  tags: string,
+  ids?: { ankiNoteId: number; ankiGuid: string },
+): ImportedNote | null {
+  const front = htmlToText(frontRaw);
+  if (!front) return null;
+  const backText = htmlToText(backRaw);
+  const { parts, kind } = splitFront(front);
+  return {
+    row,
+    front,
+    frontParts: parts,
+    splitKind: kind,
+    isGrammar: looksLikeGrammar(front),
+    format: detectFormat(backText),
+    backText,
+    tags: tags.trim(),
+    ...ids,
+  };
+}
+
+// Notes read from an .apkg (see lib/apkg.ts). Field 0 is the Front, field 1 the Back.
+export function notesFromApkg(raw: { noteId: number; guid: string; fields: string[]; tags: string }[]): ParsedDeck {
+  const notes: ImportedNote[] = [];
+  let skipped = 0;
+  for (const r of raw) {
+    const note = toImportedNote(notes.length + 1, r.fields[0] ?? "", r.fields[1] ?? "", r.tags, {
+      ankiNoteId: r.noteId,
+      ankiGuid: r.guid,
+    });
+    if (note) notes.push(note);
+    else skipped++;
+  }
+  return { headers: { source: "apkg" }, notes, skipped };
+}
+
 export function parseAnkiExport(input: string): ParsedDeck {
   const headers: Record<string, string> = {};
   const lines = input.replace(/^﻿/, "").split(/\r?\n/);
@@ -134,23 +175,9 @@ export function parseAnkiExport(input: string): ParsedDeck {
   let skipped = 0;
 
   for (const cols of rows) {
-    const front = htmlToText(cols[0] ?? "");
-    if (!front) {
-      skipped++;
-      continue;
-    }
-    const backText = htmlToText(cols[1] ?? "");
-    const { parts, kind } = splitFront(front);
-    notes.push({
-      row: notes.length + 1,
-      front,
-      frontParts: parts,
-      splitKind: kind,
-      isGrammar: looksLikeGrammar(front),
-      format: detectFormat(backText),
-      backText,
-      tags: (cols[2] ?? "").trim(),
-    });
+    const note = toImportedNote(notes.length + 1, cols[0] ?? "", cols[1] ?? "", cols[2] ?? "");
+    if (note) notes.push(note);
+    else skipped++;
   }
   return { headers, notes, skipped };
 }

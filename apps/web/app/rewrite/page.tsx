@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./rewrite.module.css";
 import { db, type DeckUnitRecord } from "@/lib/db";
 import { CardRequestError, requestCard } from "@/lib/card-client";
+import { getAccessCode, setAccessCode as storeAccessCode } from "@/lib/access-code";
 import { buildAnkiTsv, splitChanged } from "@/lib/rewrite";
 
 type Status = DeckUnitRecord["status"];
@@ -22,10 +23,11 @@ const FILTERS: { key: Filter; label: string }[] = [
 const PAGE_SIZE = 15;
 const BATCH = 25;
 const CONCURRENCY = 3;
-const CODE_KEY = "hanzisave.accessCode";
 
 // Cards that have a rewrite waiting for approval.
 const approvable = (u: DeckUnitRecord) => !!u.newBack && u.status !== "approved";
+// Bulk actions skip cards whose source changed in Anki after they were rewritten.
+const bulkApprovable = (u: DeckUnitRecord) => approvable(u) && !u.stale;
 
 export default function RewritePage() {
   const [units, setUnits] = useState<DeckUnitRecord[]>([]);
@@ -43,11 +45,7 @@ export default function RewritePage() {
   useEffect(() => {
     db.deck_units.toArray().then((all) => {
       setUnits(all);
-      try {
-        setAccessCode(localStorage.getItem(CODE_KEY) ?? "");
-      } catch {
-        // storage can be unavailable (private window); the code just isn't remembered
-      }
+      setAccessCode(getAccessCode());
       setLoaded(true);
     });
   }, []);
@@ -72,9 +70,9 @@ export default function RewritePage() {
   const shown = useMemo(() => units.filter((u) => filter === "all" || u.status === filter), [units, filter]);
   const pageCount = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
   const visible = shown.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const visibleApprovable = visible.filter(approvable).map((u) => u.id!);
+  const visibleApprovable = visible.filter(bulkApprovable).map((u) => u.id!);
   const allVisibleSelected = visibleApprovable.length > 0 && visibleApprovable.every((id) => selected.has(id));
-  const approvableAll = units.filter(approvable).map((u) => u.id!);
+  const approvableAll = units.filter(bulkApprovable).map((u) => u.id!);
   // Selection can go stale (a card approved, skipped or edited elsewhere), so count only live ones.
   const selectedIds = approvableAll.filter((id) => selected.has(id));
 
@@ -82,7 +80,7 @@ export default function RewritePage() {
     try {
       const raw = await requestCard({ item: u.front, type: u.type, oldBack: u.oldBack }, accessCode || undefined);
       const { back, changed } = splitChanged(raw);
-      await patch(u.id!, { status: "generated", newBack: back, changed, problems: undefined });
+      await patch(u.id!, { status: "generated", newBack: back, changed, problems: undefined, stale: false });
     } catch (e) {
       const err = e instanceof CardRequestError ? e : new CardRequestError(String(e), 0);
       await patch(u.id!, { status: "failed", problems: err.problems ?? [err.message] });
@@ -134,11 +132,7 @@ export default function RewritePage() {
 
   const saveAccessCode = (value: string) => {
     setAccessCode(value);
-    try {
-      localStorage.setItem(CODE_KEY, value);
-    } catch {
-      // see above
-    }
+    storeAccessCode(value);
   };
 
   const exportApproved = () => {
@@ -257,7 +251,7 @@ export default function RewritePage() {
         return (
         <div key={u.id} className={styles.card}>
           <div className={styles.cardHead}>
-            {approvable(u) && (
+            {bulkApprovable(u) && (
               <input
                 type="checkbox"
                 aria-label={`Select ${u.front}`}
@@ -270,6 +264,8 @@ export default function RewritePage() {
             <span className={styles.badge}>was {u.format}</span>
             {u.splitFrom && <span className={styles.badge}>split from {u.splitFrom}</span>}
             {duplicateFronts.has(u.front) && <span className={styles.warn}>duplicate front</span>}
+            {u.stale && <span className={styles.warn}>source changed in Anki after this rewrite</span>}
+            {u.missing && <span className={styles.warn}>no longer in Anki</span>}
           </div>
 
           <div className={styles.cols}>
@@ -302,7 +298,7 @@ export default function RewritePage() {
                 <button
                   className={styles.primary}
                   onClick={async () => {
-                    await patch(u.id!, { newBack: draft.text.trim(), status: "approved" });
+                    await patch(u.id!, { newBack: draft.text.trim(), status: "approved", stale: false });
                     setEditing(null);
                   }}
                 >

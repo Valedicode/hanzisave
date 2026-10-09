@@ -5,7 +5,7 @@ import { segment } from "../lib/segment.ts";
 import { analyze } from "../lib/analyze.ts";
 import { supportedMax } from "../lib/level.ts";
 import { hashString } from "../lib/hash.ts";
-import { parseAnkiExport } from "../lib/anki-import.ts";
+import { parseAnkiExport, notesFromApkg } from "../lib/anki-import.ts";
 import { planSplit } from "../lib/split-front.ts";
 import { buildDeckPlan } from "../lib/deck-plan.ts";
 import { buildCardPrompt, cleanCardOutput } from "../lib/card-prompt.ts";
@@ -14,6 +14,15 @@ import { checkCardFormat } from "../lib/card-format.ts";
 import { parseReasoning } from "../lib/llm/reasoning.ts";
 import { generateValidCard } from "../lib/card-service.ts";
 import { buildAnkiTsv, splitChanged } from "../lib/rewrite.ts";
+import { mergeDeck } from "../lib/merge-deck.ts";
+import { parseBackup, serializeBackup } from "../lib/backup.ts";
+import { readApkg } from "../lib/apkg.ts";
+import { DatabaseSync } from "node:sqlite";
+import { zstdCompressSync } from "node:zlib";
+import { zipSync, strToU8 } from "fflate";
+import { mkdtempSync, readFileSync as readFile, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // Longest-match re-merge: ICU splits 电脑 into 电+脑, lexicon has 电脑 (HSK1).
 {
@@ -199,6 +208,149 @@ import { buildAnkiTsv, splitChanged } from "../lib/rewrite.ts";
   assert.deepEqual(parsed.notes.map((n) => n.front), ["国土", "又…又…"]);
   assert.equal(parsed.notes[0].backText, back);
   assert.equal(parsed.notes[1].tags, "old grammar");
+}
+
+// mergeDeck(): new notes are added, rewrites survive, changed sources are flagged, vanished notes marked.
+{
+  const rec = (id, front, oldBack, status, extra = {}) => ({
+    id, front, forms: [front], type: "word", format: "old", oldBack, tags: "", sourceRow: id, status, createdAt: 0, ...extra,
+  });
+  const unit = (front, oldBack, extra = {}) => ({ front, forms: [front], type: "word", format: "old", oldBack, tags: "", sourceRow: 1, ...extra });
+  const existing = [
+    rec(1, "A", "a", "approved", { newBack: "new a" }),
+    rec(2, "B", "b", "approved", { newBack: "new b" }),
+    rec(3, "C", "c", "pending"),
+    rec(4, "D", "d", "generated", { newBack: "new d" }),
+    rec(5, "E", "e", "skipped", { missing: true }),
+    rec(6, "F", "f1", "pending"),
+    rec(7, "F", "f2", "pending"),
+  ];
+  const incoming = [
+    unit("A", "a"), // unchanged
+    unit("B", "b edited"), // rewritten, source changed -> stale
+    unit("C", "c edited"), // pending, source changed -> just updated
+    unit("NEW", "n"), // added
+    unit("E", "e"), // back again -> missing cleared
+    unit("F", "f1"),
+    unit("F", "f2"), // duplicate fronts match by occurrence
+  ];
+  const r = mergeDeck(existing, incoming);
+  assert.deepEqual(r.addedFronts, ["NEW"]);
+  assert.deepEqual(r.changedFronts, ["B", "C"]);
+  assert.deepEqual(r.staleFronts, ["B"]);
+  assert.deepEqual(r.missingFronts, ["D"]);
+  assert.equal(r.unchanged, 4); // A, E, F, F
+  const byId = Object.fromEntries(r.update.map((u) => [u.id, u.changes]));
+  assert.equal(byId[2].stale, true);
+  assert.equal(byId[2].oldBack, "b edited");
+  assert.equal("stale" in byId[3], false); // pending cards aren't marked stale
+  assert.equal(byId[4].missing, true);
+  assert.equal(byId[5].missing, false);
+  assert.equal(1 in byId, false); // untouched
+}
+
+// serializeBackup()/parseBackup(): round-trips, and rejects files that aren't a valid backup.
+{
+  const tables = {
+    deck_units: [{ id: 1, front: "国土", oldBack: "x", status: "approved", newBack: "y", extra: [1] }],
+    known: [{ key: "word:国土", item: "国土", type: "word" }],
+    texts: [],
+    cards: [],
+    reviews: [],
+  };
+  const text = serializeBackup(tables, new Date("2026-10-09T00:00:00Z"));
+  const back = parseBackup(text);
+  assert.deepEqual(back.tables, tables);
+  assert.equal(back.exportedAt, "2026-10-09T00:00:00.000Z");
+  assert.throws(() => parseBackup("not json"), /valid JSON/);
+  assert.throws(() => parseBackup(JSON.stringify({ app: "other" })), /Not a HanziSave backup/);
+  const badStatus = { ...JSON.parse(text), tables: { ...tables, deck_units: [{ front: "a", oldBack: "b", status: "weird" }] } };
+  assert.throws(() => parseBackup(JSON.stringify(badStatus)), /deck_units/);
+}
+
+// readApkg(): reads notes (with their Anki ids) from modern and legacy packages; rejects non-packages.
+{
+  const dir = mkdtempSync(join(tmpdir(), "hanzisave-test-"));
+  try {
+    const file = join(dir, "c.sqlite");
+    const db = new DatabaseSync(file);
+    db.exec("create table notes (id integer primary key, guid text, flds text, tags text)");
+    const US = String.fromCharCode(31);
+    const add = db.prepare("insert into notes (id, guid, flds, tags) values (?, ?, ?, ?)");
+    add.run(1663522866647, "g1", ["国土", "guótǔ<br>territory"].join(US), " grammar ");
+    add.run(1663522866648, "g2", ["直接", "zhíjiē"].join(US), "");
+    db.close();
+    const sqliteBytes = new Uint8Array(readFile(file));
+
+    const modern = zipSync({ "collection.anki21b": zstdCompressSync(sqliteBytes), media: strToU8("{}"), meta: strToU8("x") });
+    const legacy = zipSync({ "collection.anki2": sqliteBytes });
+    for (const pkg of [modern, legacy]) {
+      const notes = readApkg(pkg);
+      assert.equal(notes.length, 2);
+      assert.deepEqual(notes[0], { noteId: 1663522866647, guid: "g1", fields: ["国土", "guótǔ<br>territory"], tags: "grammar" });
+      assert.equal(notes[1].noteId, 1663522866648);
+    }
+    assert.throws(() => readApkg(zipSync({ media: strToU8("{}") })), /no collection/);
+    assert.throws(() => readApkg(strToU8("not a zip")), /Not an Anki package/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// mergeDeck() with Anki ids: exact pairing survives swapped duplicates and edited fronts; id-less cards adopt ids.
+{
+  const rec = (id, front, oldBack, status, extra = {}) => ({
+    id, front, forms: [front], type: "word", format: "old", oldBack, tags: "", sourceRow: id, status, createdAt: 0, ...extra,
+  });
+  const unit = (front, oldBack, extra = {}) => ({ front, forms: [front], type: "word", format: "old", oldBack, tags: "", sourceRow: 1, ...extra });
+  const existing = [
+    rec(1, "F", "first", "approved", { newBack: "n1", ankiNoteId: 10 }),
+    rec(2, "F", "second", "approved", { newBack: "n2", ankiNoteId: 11 }),
+    rec(3, "G", "g", "approved", { newBack: "n3", ankiNoteId: 20 }),
+    rec(4, "H", "h", "pending"), // imported from text, no id yet
+  ];
+  const incoming = [
+    unit("F", "second", { ankiNoteId: 11 }), // duplicate fronts listed in the other order
+    unit("F", "first", { ankiNoteId: 10 }),
+    unit("G2", "g", { ankiNoteId: 20 }), // front edited in Anki
+    unit("H", "h", { ankiNoteId: 30 }), // matched by front, adopts the id
+  ];
+  const r = mergeDeck(existing, incoming);
+  const byId = Object.fromEntries(r.update.map((u) => [u.id, u.changes]));
+  assert.deepEqual(r.addedFronts, []);
+  assert.deepEqual(r.missingFronts, []);
+  assert.equal(1 in byId && "stale" in byId[1], false); // right history stays with the right card
+  assert.equal(2 in byId && "stale" in byId[2], false);
+  assert.deepEqual([byId[3].front, byId[3].stale], ["G2", true]); // renamed -> stale, still the same card
+  assert.equal(byId[4].ankiNoteId, 30);
+  assert.deepEqual(r.staleFronts, ["G2"]);
+
+  // split parts share a note id but stay distinct cards
+  const parts = [rec(5, "优惠", "x", "pending", { ankiNoteId: 40, splitFrom: "优惠 / 会员" }), rec(6, "会员", "x", "pending", { ankiNoteId: 40, splitFrom: "优惠 / 会员" })];
+  const same = mergeDeck(parts, [unit("优惠", "x", { ankiNoteId: 40, splitFrom: "优惠 / 会员" }), unit("会员", "x", { ankiNoteId: 40, splitFrom: "优惠 / 会员" })]);
+  assert.equal(same.add.length, 0);
+  assert.equal(same.unchanged, 2);
+}
+
+// notesFromApkg(): ids and cleaned text carry through to the parsed deck.
+{
+  const deck = notesFromApkg([{ noteId: 7, guid: "g", fields: ["<div>国土</div>", "guótǔ<br>territory"], tags: " x " }, { noteId: 8, guid: "h", fields: ["", "empty"], tags: "" }]);
+  assert.equal(deck.notes.length, 1);
+  assert.equal(deck.skipped, 1);
+  assert.deepEqual([deck.notes[0].front, deck.notes[0].ankiNoteId, deck.notes[0].ankiGuid, deck.notes[0].tags], ["国土", 7, "g", "x"]);
+  const plan = buildDeckPlan(deck, { entries: {}, forms: {} });
+  assert.equal(plan.units[0].ankiNoteId, 7);
+}
+
+// mergeDeck(): id-less duplicates adopt the right ids even when the export lists them in another order.
+{
+  const rec = (id, front, oldBack) => ({ id, front, forms: [front], type: "word", format: "old", oldBack, tags: "", sourceRow: id, status: "pending", createdAt: 0 });
+  const unit = (front, oldBack, ankiNoteId) => ({ front, forms: [front], type: "word", format: "old", oldBack, tags: "", sourceRow: 1, ankiNoteId });
+  const r = mergeDeck([rec(1, "F", "first"), rec(2, "F", "second")], [unit("F", "second", 11), unit("F", "first", 10)]);
+  const byId = Object.fromEntries(r.update.map((u) => [u.id, u.changes]));
+  assert.equal(byId[1].ankiNoteId, 10);
+  assert.equal(byId[2].ankiNoteId, 11);
+  assert.equal(r.changedFronts.length, 0);
 }
 
 console.log("smoke-test: all checks passed");
