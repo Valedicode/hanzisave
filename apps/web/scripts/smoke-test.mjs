@@ -2,6 +2,7 @@
 // asserts the behaviors the v0.1 checklist depends on.
 import assert from "node:assert/strict";
 import { segment } from "../lib/segment.ts";
+import { grammarPoint, grammarPoints, pointsUpToLevel } from "../lib/grammar.ts";
 import { analyze } from "../lib/analyze.ts";
 import { supportedMax } from "../lib/level.ts";
 import { hashString } from "../lib/hash.ts";
@@ -749,6 +750,26 @@ import { join } from "node:path";
   const found = scanText(text, { known: new Set(), levelFloor: 2 }).newWords.find((w) => w.surface === "安眠药");
   assert.equal(found?.level, 7);
   assert.ok(!scanText(text, { known: new Set(), levelFloor: 7 }).newWords.some((w) => w.surface === "安眠药"), "a floor of 7 hides the whole 7-9 band");
+}
+
+// Grammar catalog: patterns only, stable ids, frames where a pattern can be matched.
+{
+  assert.equal(grammarPoints.length, 280);
+  assert.equal(new Set(grammarPoints.map((p) => p.id)).size, grammarPoints.length, "ids are unique");
+  assert.ok(grammarPoints.every((p) => p.name && p.level >= 1 && p.level <= 7));
+  assert.ok(!grammarPoints.some((p) => ["词类", "语素", "短语", "句群"].includes(p.group)), "word classes and phrase types are not grammar points");
+  assert.ok(!grammarPoints.some((p) => p.name.startsWith("※")), "cross-reference rows are dropped");
+
+  const you = grammarPoint("g94");
+  assert.deepEqual([you?.name, you?.level, you?.group, you?.frames], ["又……又……", 2, "固定格式", ["又……又……"]]);
+  assert.equal(grammarPoint("g38")?.name, "比较句1");
+  assert.equal(grammarPoint("g38")?.frames, undefined, "sentence types have no surface frame");
+  assert.deepEqual(grammarPoint("g39")?.frames, ["一边……，一边……", "……，也……"], "frames come from the 用关联词语 part");
+  assert.equal(grammarPoint("g500")?.level, 7, "7-9 is level 7");
+  assert.equal(grammarPoint("g44")?.name, "时间表示法");
+
+  assert.equal(pointsUpToLevel(1).length, 20);
+  assert.ok(pointsUpToLevel(3).every((p) => p.level <= 3) && pointsUpToLevel(7).length === grammarPoints.length);
 }
 
 console.log("smoke-test: all checks passed");
