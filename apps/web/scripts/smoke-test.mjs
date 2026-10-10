@@ -709,6 +709,8 @@ import { join } from "node:path";
   const accepted = new Set(["绑定"]);
   const second = planComponentCards(phrases, new Set(), (w) => w === "银行卡" || accepted.has(w));
   assert.deepEqual(second.add.map((a) => a.front).sort(), ["绑定", "银行卡"]);
+}
+
 // Grammar cards: the Structure lines get pinyin on the hanzi only; other sections are left alone.
 {
   const NL = String.fromCharCode(10);
@@ -730,6 +732,8 @@ import { join } from "node:path";
   assert.equal(out[0], card.split(NL)[0], "the Pattern line is not changed");
   assert.equal(out[6], card.split(NL)[6], "Watch out lines are not changed");
   assert.equal(addPatternPinyin(addPatternPinyin(card, fake), fake), addPatternPinyin(card, fake), "idempotent");
+}
+
 // HSK 3.0 words beyond level 6: found whole by the segmenter, level 7, and hidden by a level floor of 7.
 {
   assert.equal(lookup("爱")?.level, 1, "a word in the HSK 1-6 lexicon keeps its level");
