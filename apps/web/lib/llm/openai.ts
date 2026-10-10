@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { buildCardPrompt, cleanCardOutput } from "../card-prompt";
 import { GLOSS_SYSTEM, buildGlossPrompt, parseGloss } from "../gloss-prompt";
+import { WORD_CHECK_SYSTEM, buildWordCheckPrompt, parseWordCheck } from "../word-check-prompt";
 import { OCR_PROMPT } from "../ocr-prompt";
 import { parseReasoning } from "./reasoning";
 import type { GlossRequest } from "../gloss-schema";
@@ -69,6 +70,27 @@ export function createOpenAiProvider(
         }
       }
       throw new LlmError("model returned an unusable gloss", 502);
+    },
+    async checkWords(candidates: string[]) {
+      if (candidates.length === 0) return [];
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const completion = await client.chat.completions.create({
+            model,
+            max_tokens: 800,
+            messages: [
+              { role: "system", content: WORD_CHECK_SYSTEM },
+              { role: "user", content: buildWordCheckPrompt(candidates) },
+            ],
+            ...(reasoning && { reasoning }),
+          } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming);
+          const words = parseWordCheck(completion.choices[0]?.message.content ?? "", candidates);
+          if (words) return words;
+        } catch (error) {
+          throw error instanceof LlmError ? error : toLlmError(error);
+        }
+      }
+      throw new LlmError("model returned an unusable word check", 502);
     },
     async extractText(image: ImageInput) {
       try {
