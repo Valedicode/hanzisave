@@ -25,6 +25,8 @@ export interface LlmProvider {
   extractText(image: ImageInput): Promise<string>;
   // A short preview of a word as used in a sentence: pinyin, meaning and a new example.
   generateGloss(req: GlossRequest): Promise<Gloss>;
+  // Which of these strings are real standalone words, worth a vocabulary card of their own.
+  checkWords(candidates: string[]): Promise<string[]>;
 }
 
 // Errors a provider reports in vendor-neutral form; `status` is an HTTP status

@@ -14,6 +14,7 @@ import { checkCardFormat, checkPatternExamples } from "../lib/card-format.ts";
 import { parseReasoning } from "../lib/llm/reasoning.ts";
 import { generateValidCard } from "../lib/card-service.ts";
 import { parseGloss } from "../lib/gloss-prompt.ts";
+import { parseWordCheck } from "../lib/word-check-prompt.ts";
 import { CardPrefetcher } from "../lib/card-prefetch.ts";
 import { createOpenAiProvider } from "../lib/llm/openai.ts";
 import { buildAnkiTsv, splitChanged, toHtmlField } from "../lib/rewrite.ts";
@@ -680,6 +681,33 @@ import { join } from "node:path";
   assert.equal(await h.p.request("a", "sa"), "old");
   assert.equal(await h.p.fresh("a", "sa"), "card:a");
   assert.equal(h.stored.get("a|sa"), "card:a");
+}
+
+// Word check: only words that were asked about can come back; the plan then keeps the accepted parts.
+{
+  const asked = ["绑定", "时差", "回事", "员"];
+  assert.deepEqual(parseWordCheck('{"words":["绑定","时差"]}', asked), ["绑定", "时差"]);
+  assert.deepEqual(parseWordCheck('Sure:\n```json\n{"words":["绑定","松鼠"]}\n```', asked), ["绑定"], "a word that was not asked about is dropped");
+  assert.deepEqual(parseWordCheck('{"words":[]}', asked), []);
+  assert.equal(parseWordCheck('{"words":"绑定"}', asked), null);
+  assert.equal(parseWordCheck("no", asked), null);
+
+  const calls = [];
+  const fake = (...replies) => ({ chat: { completions: { create: async (p) => { calls.push(p); return { choices: [{ message: { content: replies[Math.min(calls.length - 1, replies.length - 1)] } }] }; } } } });
+  const provider = createOpenAiProvider(fake("oops", '{"words":["绑定"]}'), "qwen/test", undefined);
+  assert.deepEqual(await provider.checkWords(["绑定", "回事"]), ["绑定"]);
+  assert.equal(calls.length, 2, "one retry on an unusable reply");
+  calls.length = 0;
+  assert.deepEqual(await createOpenAiProvider(fake("x"), "qwen/test", undefined).checkWords([]), [], "nothing to ask, nothing sent");
+  assert.equal(calls.length, 0);
+
+  // recovered parts are added by a second pass of the plan
+  const phrases = ["绑定银行卡"];
+  const strict = planComponentCards(phrases, new Set(), (w) => w === "银行卡");
+  assert.ok(strict.unverified.includes("绑定") && !strict.add.some((a) => a.front === "绑定"));
+  const accepted = new Set(["绑定"]);
+  const second = planComponentCards(phrases, new Set(), (w) => w === "银行卡" || accepted.has(w));
+  assert.deepEqual(second.add.map((a) => a.front).sort(), ["绑定", "银行卡"]);
 }
 
 console.log("smoke-test: all checks passed");
