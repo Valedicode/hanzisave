@@ -862,14 +862,16 @@ import { join } from "node:path";
   const hit = detectGrammar("我一边吃饭，一边看书。")[0];
   assert.equal(hit.frame, "一边……，一边……");
   assert.equal(grammarFront(hit.point, hit.frame), "一边……一边……", "the front is written like the deck's");
-  assert.equal(grammarFront(grammarPoint("g184"), undefined), "把字句1", "quotes are dropped from structure names");
+  assert.equal(grammarFront(grammarPoint("g184"), undefined), "把字句1 (把 sentence (disposal))", "quotes are dropped and the English name added");
+  assert.equal(grammarFront(grammarPoint("g105"), undefined), "连动句1 (serial verb sentence)");
+  assert.ok(grammarPoints.every((p) => p.frames || p.en), "every structure has an English name");
   assert.equal(levelParam(3), "3");
   assert.equal(levelParam(7), "7-9");
 
   const pattern = grammarRequest("g94", "又……又……", "他又高又帅。");
   assert.deepEqual(pattern, { item: "又……又……", type: "grammar", context: "他又高又帅。", hsk: "2" });
   const structure = grammarRequest("g106", "比较句2", "她比我高三厘米。");
-  assert.ok(structure.item.startsWith("比较句2 (") && structure.item.length <= 60, "the use is added within the item limit: " + structure.item);
+  assert.ok(structure.item.startsWith("比较句2 (comparison: ") && structure.item.length <= 60, "the use is added within the item limit: " + structure.item);
   assert.equal(grammarRequest("g500", "x", "y").hsk, "7-9");
   assert.equal(grammarRequest("nope", "x", "y"), null);
   for (const point of grammarPoints) {

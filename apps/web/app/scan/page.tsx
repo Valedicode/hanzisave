@@ -607,6 +607,7 @@ export default function ScanPage() {
                 return (
                   <div key={hit.point.id} className={styles.word}>
                     <span className={styles.pattern}>{hit.point.name}</span>
+                    {hit.point.en && <span className={styles.hint}>{hit.point.en}</span>}
                     <span className={styles.level} style={{ background: LEVEL_COLOR[hit.point.level] }}>
                       {levelLabel(hit.point.level)}
                     </span>
