@@ -1,11 +1,12 @@
 import OpenAI from "openai";
 import { buildCardPrompt, cleanCardOutput } from "../card-prompt";
 import { GLOSS_SYSTEM, buildGlossPrompt, parseGloss } from "../gloss-prompt";
+import { GRAMMAR_SYSTEM, buildGrammarPrompt, parseGrammarReply } from "../grammar-prompt";
 import { WORD_CHECK_SYSTEM, buildWordCheckPrompt, parseWordCheck } from "../word-check-prompt";
 import { OCR_PROMPT } from "../ocr-prompt";
 import { parseReasoning } from "./reasoning";
 import type { GlossRequest } from "../gloss-schema";
-import { LlmError, type CardRequest, type ImageInput, type LlmProvider } from "./types";
+import { LlmError, type CardRequest, type GrammarCandidate, type ImageInput, type LlmProvider } from "./types";
 
 const DEFAULT_MODEL = "gpt-5.4-mini";
 
@@ -91,6 +92,28 @@ export function createOpenAiProvider(
         }
       }
       throw new LlmError("model returned an unusable word check", 502);
+    },
+    async findGrammar(text: string, candidates: GrammarCandidate[]) {
+      if (candidates.length === 0 || !text.trim()) return [];
+      const ids = candidates.map((c) => c.id);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const completion = await client.chat.completions.create({
+            model,
+            max_tokens: 1500,
+            messages: [
+              { role: "system", content: GRAMMAR_SYSTEM },
+              { role: "user", content: buildGrammarPrompt(text, candidates) },
+            ],
+            ...(reasoning && { reasoning }),
+          } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming);
+          const findings = parseGrammarReply(completion.choices[0]?.message.content ?? "", text, ids);
+          if (findings) return findings;
+        } catch (error) {
+          throw error instanceof LlmError ? error : toLlmError(error);
+        }
+      }
+      throw new LlmError("model returned an unusable grammar check", 502);
     },
     async extractText(image: ImageInput) {
       try {

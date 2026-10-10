@@ -18,6 +18,18 @@ export interface ImageInput {
   data: string; // base64, without the data: prefix
 }
 
+// A catalog grammar point offered to the model, and the sentence it says uses it.
+export interface GrammarCandidate {
+  id: string;
+  name: string;
+  desc: string;
+}
+
+export interface GrammarFinding {
+  id: string;
+  sentence: string;
+}
+
 export interface LlmProvider {
   // Returns the card Back text exactly as the model produced it.
   generateCard(req: CardRequest, spec: string): Promise<string>;
@@ -27,6 +39,8 @@ export interface LlmProvider {
   generateGloss(req: GlossRequest): Promise<Gloss>;
   // Which of these strings are real standalone words, worth a vocabulary card of their own.
   checkWords(candidates: string[]): Promise<string[]>;
+  // Which of these grammar points the text uses, each with the sentence that uses it.
+  findGrammar(text: string, candidates: GrammarCandidate[]): Promise<GrammarFinding[]>;
 }
 
 // Errors a provider reports in vendor-neutral form; `status` is an HTTP status

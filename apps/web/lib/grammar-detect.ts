@@ -2,7 +2,7 @@
 // Points without a literal frame (把, 被, 比, complements, 是……的) are left to the model.
 
 import { splitSentences } from "./analyze";
-import { grammarPoints, type GrammarPoint } from "./grammar";
+import { grammarPoint, grammarPoints, type GrammarPoint } from "./grammar";
 
 export interface GrammarHit {
   point: GrammarPoint;
@@ -124,4 +124,18 @@ export function detectGrammar(text: string, { known, levelFloor = 0 }: GrammarSc
     }
   }
   return [...found.values()];
+}
+
+// The points rules cannot find (no usable frame) that are still new to the learner: what the model is asked about.
+export function structureCandidates({ known, levelFloor = 0 }: GrammarScanOptions = {}): GrammarPoint[] {
+  const byRules = new Set(frameMatchers().map(({ point }) => point.id));
+  return grammarPoints.filter((p) => !byRules.has(p.id) && !known?.has(p.id) && p.level > levelFloor);
+}
+
+// The model's findings as list entries; with no frame there is no matched span to point at.
+export function modelHits(findings: { id: string; sentence: string }[]): GrammarHit[] {
+  return findings.flatMap(({ id, sentence }) => {
+    const point = grammarPoint(id);
+    return point ? [{ point, count: 1, sentence, matched: "" }] : [];
+  });
 }

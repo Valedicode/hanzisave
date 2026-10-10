@@ -3,7 +3,8 @@
 import assert from "node:assert/strict";
 import { segment } from "../lib/segment.ts";
 import { grammarPoint, grammarPoints, pointsUpToLevel } from "../lib/grammar.ts";
-import { compileFrame, detectGrammar, frameMatchers, sameFrame } from "../lib/grammar-detect.ts";
+import { compileFrame, detectGrammar, frameMatchers, modelHits, sameFrame, structureCandidates } from "../lib/grammar-detect.ts";
+import { buildGrammarPrompt, parseGrammarReply } from "../lib/grammar-prompt.ts";
 import { matchDeckFront } from "../lib/grammar-known.ts";
 import { analyze } from "../lib/analyze.ts";
 import { supportedMax } from "../lib/level.ts";
@@ -814,6 +815,45 @@ import { join } from "node:path";
   assert.deepEqual(ids("非……不可"), ["g413"]);
   assert.deepEqual(ids("百分之……"), []);
   assert.deepEqual(ids("不是……吗？"), []);
+}
+
+// Model grammar check: only asked-about ids with a sentence that is really in the text come back.
+{
+  const text = "他把书放在桌子上。今天天气很好。";
+  const asked = ["g184", "g38"];
+  const parse = (reply) => parseGrammarReply(reply, text, asked);
+  assert.deepEqual(parse('{"points":[{"id":"g184","sentence":"他把书放在桌子上。"}]}'), [{ id: "g184", sentence: "他把书放在桌子上。" }]);
+  const nl = String.fromCharCode(10);
+  const fence = String.fromCharCode(96).repeat(3);
+  const fenced = "Sure:" + nl + fence + "json" + nl + '{"points":[{"id":"g184","sentence":"他把书放在桌子上"}]}' + nl + fence;
+  assert.deepEqual(parse(fenced), [{ id: "g184", sentence: "他把书放在桌子上。" }], "the text's own sentence replaces the copy");
+  assert.deepEqual(parse('{"points":[{"id":"g999","sentence":"他把书放在桌子上。"}]}'), [], "an id that was not asked about is dropped");
+  assert.deepEqual(parse('{"points":[{"id":"g38","sentence":"我比他高。"}]}'), [], "a sentence that is not in the text is dropped");
+  assert.deepEqual(parse('{"points":[{"id":"g184","sentence":"他把书放在桌子上。"},{"id":"g184","sentence":"今天天气很好。"}]}').length, 1, "one entry per id");
+  assert.deepEqual(parse('{"points":[]}'), []);
+  assert.equal(parse('{"points":"g184"}'), null);
+  assert.equal(parse("no"), null);
+
+  const prompt = buildGrammarPrompt(text, [{ id: "g184", name: "“把”字句1", desc: "表处置" }]);
+  assert.ok(prompt.includes("g184 | “把”字句1 | 表处置") && prompt.endsWith(text));
+
+  const calls = [];
+  const fake = (...replies) => ({ chat: { completions: { create: async (p) => { calls.push(p); return { choices: [{ message: { content: replies[Math.min(calls.length - 1, replies.length - 1)] } }] }; } } } });
+  const candidates = [{ id: "g184", name: "“把”字句1", desc: "表处置" }];
+  const provider = createOpenAiProvider(fake("oops", '{"points":[{"id":"g184","sentence":"他把书放在桌子上。"}]}'), "qwen/test", undefined);
+  assert.deepEqual(await provider.findGrammar(text, candidates), [{ id: "g184", sentence: "他把书放在桌子上。" }]);
+  assert.equal(calls.length, 2, "one retry on an unusable reply");
+  calls.length = 0;
+  assert.deepEqual(await createOpenAiProvider(fake("x"), "qwen/test", undefined).findGrammar(text, []), [], "nothing to ask, nothing sent");
+  assert.equal(calls.length, 0);
+
+  // what the model is asked about: points without a usable frame that are new
+  const byRules = new Set(frameMatchers().map(({ point }) => point.id));
+  const open = structureCandidates({ levelFloor: 2 });
+  assert.ok(open.length > 100 && open.every((p) => !byRules.has(p.id) && p.level > 2));
+  assert.ok(open.some((p) => p.id === "g184"), "“把”字句 has no frame, so it goes to the model");
+  assert.ok(!structureCandidates({ known: new Set(["g184"]) }).some((p) => p.id === "g184"));
+  assert.deepEqual(modelHits([{ id: "g184", sentence: "他把书放在桌子上。" }, { id: "nope", sentence: "x" }]).map((h) => [h.point.id, h.matched]), [["g184", ""]]);
 }
 
 console.log("smoke-test: all checks passed");
