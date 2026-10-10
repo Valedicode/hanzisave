@@ -13,6 +13,7 @@ import { planComponentCards } from "@/lib/components";
 import { etaTracker, formatEta } from "@/lib/eta";
 import { lookup } from "@/lib/lexicon";
 import { loadKnownWords } from "@/lib/known-db";
+import { checkWords } from "@/lib/word-check";
 import type { Hsk30Index } from "@/lib/split-front";
 import { buildAnkiTsv, splitChanged } from "@/lib/rewrite";
 import { TransitionStep } from "./transition-step";
@@ -169,7 +170,20 @@ export default function RewritePage() {
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null);
     const isWord = (w: string) => lookup(w) !== undefined || hsk30?.forms[w] !== undefined;
-    const plan = planComponentCards(phrases, existing, isWord);
+    let plan = planComponentCards(phrases, existing, isWord);
+    // Words the lists and the deck do not have (绑定, 时差, 松鼠) are checked by the model, so real
+    // words are recovered and fragments (回事, 员) stay out. If the check fails they stay out too.
+    let recovered: string[] = [];
+    let checkFailed = false;
+    if (plan.unverified.length > 0) {
+      try {
+        const accepted = new Set(await checkWords(plan.unverified, getAccessCode() || undefined));
+        recovered = plan.unverified.filter((w) => accepted.has(w));
+        if (recovered.length > 0) plan = planComponentCards(phrases, existing, (w) => isWord(w) || accepted.has(w));
+      } catch {
+        checkFailed = true;
+      }
+    }
     if (plan.add.length > 0) {
       const now = Date.now();
       const records: DeckUnitRecord[] = plan.add.map((a) => ({
@@ -194,9 +208,10 @@ export default function RewritePage() {
         : "";
     const left =
       plan.unverified.length > 0
-        ? ` Left out ${plan.unverified.length} parts that are not in the HSK lists or your deck: ${plan.unverified.join(", ")}.`
+        ? ` Left out ${plan.unverified.length} parts that are ${checkFailed ? "not in the HSK lists or your deck (the word check could not run)" : "not words on their own"}: ${plan.unverified.join(", ")}.`
         : "";
-    if (message || left) setNotice((prev) => (prev ? `${prev} ${message}${left}` : `${message}${left}`.trim()));
+    const rescued = recovered.length > 0 ? ` The word check kept ${recovered.join(", ")}, which are not in the HSK lists.` : "";
+    if (message || left) setNotice((prev) => (prev ? `${prev} ${message}${rescued}${left}` : `${message}${rescued}${left}`.trim()));
   };
 
   const runQueue = async (queue: DeckUnitRecord[]) => {
