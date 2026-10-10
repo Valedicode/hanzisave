@@ -107,6 +107,11 @@
   font-weight: 900;
 }
 
+.pattern {
+  font-size: 17px;
+  font-weight: 900;
+}
+
 .level {
   padding: 2px 9px;
   border-radius: 999px;

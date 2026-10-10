@@ -2,6 +2,8 @@
 // asserts the behaviors the v0.1 checklist depends on.
 import assert from "node:assert/strict";
 import { segment } from "../lib/segment.ts";
+import { grammarPoint, grammarPoints, pointsUpToLevel } from "../lib/grammar.ts";
+import { compileFrame, detectGrammar, frameMatchers } from "../lib/grammar-detect.ts";
 import { analyze } from "../lib/analyze.ts";
 import { supportedMax } from "../lib/level.ts";
 import { hashString } from "../lib/hash.ts";
@@ -749,6 +751,50 @@ import { join } from "node:path";
   const found = scanText(text, { known: new Set(), levelFloor: 2 }).newWords.find((w) => w.surface === "安眠药");
   assert.equal(found?.level, 7);
   assert.ok(!scanText(text, { known: new Set(), levelFloor: 7 }).newWords.some((w) => w.surface === "安眠药"), "a floor of 7 hides the whole 7-9 band");
+}
+
+// Grammar catalog: patterns only, stable ids, frames where a pattern can be matched.
+{
+  assert.equal(grammarPoints.length, 280);
+  assert.equal(new Set(grammarPoints.map((p) => p.id)).size, grammarPoints.length, "ids are unique");
+  assert.ok(grammarPoints.every((p) => p.name && p.level >= 1 && p.level <= 7));
+  assert.ok(!grammarPoints.some((p) => ["词类", "语素", "短语", "句群"].includes(p.group)), "word classes and phrase types are not grammar points");
+  assert.ok(!grammarPoints.some((p) => p.name.startsWith("※")), "cross-reference rows are dropped");
+
+  const you = grammarPoint("g94");
+  assert.deepEqual([you?.name, you?.level, you?.group, you?.frames], ["又……又……", 2, "固定格式", ["又……又……"]]);
+  assert.equal(grammarPoint("g38")?.name, "比较句1");
+  assert.equal(grammarPoint("g38")?.frames, undefined, "sentence types have no surface frame");
+  assert.deepEqual(grammarPoint("g39")?.frames, ["一边……，一边……", "……，也……"], "frames come from the 用关联词语 part");
+  assert.equal(grammarPoint("g500")?.level, 7, "7-9 is level 7");
+  assert.equal(grammarPoint("g44")?.name, "时间表示法");
+
+  assert.equal(pointsUpToLevel(1).length, 20);
+  assert.ok(pointsUpToLevel(3).every((p) => p.level <= 3) && pointsUpToLevel(7).length === grammarPoints.length);
+}
+
+// Grammar detection by frame: ……-patterns are found, loose or slotted frames are left to the model.
+{
+  assert.equal(compileFrame("又……又……")?.source, "(?:又).{1,20}?(?:又)");
+  assert.ok(compileFrame("不仅/不光……，还/而且……")?.test("他不光会说，而且会写"));
+  assert.ok(compileFrame("除了……（以外），……还/也/都……")?.test("除了他，我们都去"), "an optional part may be absent");
+  assert.equal(compileFrame("……，也……"), null, "one anchor is too loose");
+  assert.equal(compileFrame("X就X吧"), null, "a slot cannot be matched literally");
+  assert.equal(compileFrame("动词+一X是一X"), null);
+  assert.ok(frameMatchers().length > 80, "most frame points compile");
+
+  const ids = (text, options) => detectGrammar(text, options).map((h) => h.point.id);
+  assert.ok(ids("他又高又帅。").includes("g94"));
+  assert.deepEqual(ids("我一边吃饭，一边看书。"), ["g39"]);
+  assert.deepEqual(ids("他不来。"), []);
+  const nested = ids("虽然很累，但是很开心。");
+  assert.ok(nested.includes("g113") && !nested.includes("g407"), "虽……但 inside 虽然……但是 is not a second point");
+
+  const hit = detectGrammar("天气很好。他一进门就坐下了。她一到就走了。")[0];
+  assert.deepEqual([hit.point.id, hit.count, hit.sentence, hit.matched], ["g117", 2, "他一进门就坐下了。", "一进门就"]);
+
+  assert.deepEqual(ids("他又高又帅。", { levelFloor: 3 }).filter((id) => id === "g94"), [], "a level floor hides points at or below it");
+  assert.ok(!ids("他又高又帅。", { known: new Set(["g94"]) }).includes("g94"), "a known point is not new");
 }
 
 console.log("smoke-test: all checks passed");

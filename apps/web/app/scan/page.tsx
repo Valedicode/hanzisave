@@ -13,6 +13,7 @@ import { CardPrefetcher, type PrefetchProgress } from "@/lib/card-prefetch";
 import { levelLabel } from "@/lib/lexicon";
 import { loadKnownWords, markKnown } from "@/lib/known-db";
 import { buildAnkiTsv } from "@/lib/rewrite";
+import { detectGrammar, type GrammarHit } from "@/lib/grammar-detect";
 import { markText, scanText, type MarkedSentence, type NewWord, type ScanResult } from "@/lib/scan";
 
 const FLOOR_KEY = "hanzisave.levelFloor";
@@ -56,6 +57,7 @@ export default function ScanPage() {
   const [levelFloor, setLevelFloor] = useState(2);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [marked, setMarked] = useState<MarkedSentence[] | null>(null);
+  const [grammar, setGrammar] = useState<GrammarHit[]>([]);
   const [preview, setPreview] = useState<PreviewTarget | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [cards, setCards] = useState<NewCardRecord[]>([]);
@@ -138,6 +140,7 @@ export default function ScanPage() {
     setResult(scanned);
     prefetcher.start(scanned.newWords.map((w) => ({ word: w.surface, sentence: w.sentence.slice(0, 400) })));
     setMarked(markText(text, { known, levelFloor }));
+    setGrammar(detectGrammar(text, { levelFloor }));
     setPreview(null);
     setSelected(new Set());
   };
@@ -527,9 +530,27 @@ export default function ScanPage() {
           </details>
 
           <details className={styles.details}>
-            <summary className={styles.summary}>New grammar (0)</summary>
+            <summary className={styles.summary}>New grammar ({grammar.length})</summary>
             <div className={styles.detailsBody}>
-              <div className={styles.hint}>Grammar points are not detected yet. They will be listed here, separately from words.</div>
+              {grammar.map((hit) => {
+                const at = hit.sentence.indexOf(hit.matched);
+                return (
+                  <div key={hit.point.id} className={styles.word}>
+                    <span className={styles.pattern}>{hit.point.name}</span>
+                    <span className={styles.level} style={{ background: LEVEL_COLOR[hit.point.level] }}>
+                      {levelLabel(hit.point.level)}
+                    </span>
+                    {hit.count > 1 && <span className={styles.hint}>×{hit.count}</span>}
+                    <span className={styles.context}>
+                      {hit.sentence.slice(0, at)}
+                      <b>{hit.matched}</b>
+                      {hit.sentence.slice(at + hit.matched.length)}
+                    </span>
+                  </div>
+                );
+              })}
+              {grammar.length === 0 && <div className={styles.hint}>No new grammar patterns found in this text.</div>}
+              <div className={styles.hint}>Found by pattern, such as 又……又…… or 虽然……但是……. Sentence structures like 把, 被, 比 and complements are not detected yet.</div>
             </div>
           </details>
         </div>
