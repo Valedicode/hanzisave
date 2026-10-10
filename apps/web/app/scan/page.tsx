@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./scan.module.css";
 import { db, type NewCardRecord } from "@/lib/db";
 import { getAccessCode } from "@/lib/access-code";
@@ -13,7 +13,8 @@ import { CardPrefetcher, type PrefetchProgress } from "@/lib/card-prefetch";
 import { levelLabel } from "@/lib/lexicon";
 import { loadKnownGrammar, loadKnownWords, markGrammarKnown, markKnown } from "@/lib/known-db";
 import { buildAnkiTsv } from "@/lib/rewrite";
-import { detectGrammar, type GrammarHit } from "@/lib/grammar-detect";
+import { findGrammar, GrammarRequestError } from "@/lib/grammar-client";
+import { detectGrammar, modelHits, structureCandidates, type GrammarHit } from "@/lib/grammar-detect";
 import { markText, scanText, type MarkedSentence, type NewWord, type ScanResult } from "@/lib/scan";
 
 const FLOOR_KEY = "hanzisave.levelFloor";
@@ -58,6 +59,9 @@ export default function ScanPage() {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [marked, setMarked] = useState<MarkedSentence[] | null>(null);
   const [grammar, setGrammar] = useState<GrammarHit[]>([]);
+  // The model check for sentence structures runs after the rules; a newer scan makes an older answer stale.
+  const [structures, setStructures] = useState<"idle" | "checking" | "failed">("idle");
+  const scanRun = useRef(0);
   const [preview, setPreview] = useState<PreviewTarget | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [cards, setCards] = useState<NewCardRecord[]>([]);
@@ -141,8 +145,30 @@ export default function ScanPage() {
     prefetcher.start(scanned.newWords.map((w) => ({ word: w.surface, sentence: w.sentence.slice(0, 400) })));
     setMarked(markText(text, { known, levelFloor }));
     setGrammar(detectGrammar(text, { known: knownGrammar, levelFloor }));
+    void checkStructures(knownGrammar);
     setPreview(null);
     setSelected(new Set());
+  };
+
+  // Points rules cannot find (把, 被, 比, complements) are asked of the model, which may only name catalog ids.
+  const checkStructures = async (knownGrammar: ReadonlySet<string>) => {
+    const run = ++scanRun.current;
+    const ids = structureCandidates({ known: knownGrammar, levelFloor }).map((p) => p.id);
+    if (ids.length === 0) {
+      setStructures("idle");
+      return;
+    }
+    setStructures("checking");
+    try {
+      const findings = await findGrammar(text, ids, getAccessCode() || undefined);
+      if (run !== scanRun.current) return;
+      setGrammar((prev) => [...prev, ...modelHits(findings).filter((hit) => !prev.some((p) => p.point.id === hit.point.id))]);
+      setStructures("idle");
+    } catch (e) {
+      if (run !== scanRun.current) return;
+      if (e instanceof GrammarRequestError && e.status === 401) setNeedsCode(true);
+      setStructures("failed");
+    }
   };
 
   const grammarKnown = async (ids: string[]) => {
@@ -538,7 +564,7 @@ export default function ScanPage() {
             <summary className={styles.summary}>New grammar ({grammar.length})</summary>
             <div className={styles.detailsBody}>
               {grammar.map((hit) => {
-                const at = hit.sentence.indexOf(hit.matched);
+                const at = hit.matched ? hit.sentence.indexOf(hit.matched) : -1;
                 return (
                   <div key={hit.point.id} className={styles.word}>
                     <span className={styles.pattern}>{hit.point.name}</span>
@@ -547,9 +573,15 @@ export default function ScanPage() {
                     </span>
                     {hit.count > 1 && <span className={styles.hint}>×{hit.count}</span>}
                     <span className={styles.context}>
-                      {hit.sentence.slice(0, at)}
-                      <b>{hit.matched}</b>
-                      {hit.sentence.slice(at + hit.matched.length)}
+                      {at < 0 ? (
+                        hit.sentence
+                      ) : (
+                        <>
+                          {hit.sentence.slice(0, at)}
+                          <b>{hit.matched}</b>
+                          {hit.sentence.slice(at + hit.matched.length)}
+                        </>
+                      )}
                     </span>
                     <button className={styles.secondary} onClick={() => grammarKnown([hit.point.id])}>
                       I know it
@@ -557,8 +589,16 @@ export default function ScanPage() {
                   </div>
                 );
               })}
-              {grammar.length === 0 && <div className={styles.hint}>No new grammar patterns found in this text.</div>}
-              <div className={styles.hint}>Found by pattern, such as 又……又…… or 虽然……但是……. Sentence structures like 把, 被, 比 and complements are not detected yet.</div>
+              {structures === "checking" && (
+                <div className={styles.hint}>
+                  <Spinner /> Checking sentence structures (把, 被, 比, complements)…
+                </div>
+              )}
+              {grammar.length === 0 && structures !== "checking" && <div className={styles.hint}>No new grammar found in this text.</div>}
+              {structures === "failed" && (
+                <div className={styles.hint}>The sentence-structure check did not run, so only fixed patterns are listed.</div>
+              )}
+              <div className={styles.hint}>Fixed patterns such as 又……又…… are found by rules; sentence structures are suggested by the model, so check them against the sentence.</div>
             </div>
           </details>
         </div>
