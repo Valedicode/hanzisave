@@ -78,6 +78,7 @@ export interface KnownRecord {
 export interface NewCardRecord {
   id?: number;
   type?: "word" | "grammar"; // absent on cards made before grammar existed: those are words
+  pointId?: string; // the catalog grammar point a grammar card was made for
   front: string;
   level: number | null; // HSK level from the lexicon, null if not in the HSK list
   context: string; // the sentence it was met in

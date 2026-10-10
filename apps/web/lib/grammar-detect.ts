@@ -8,7 +8,8 @@ export interface GrammarHit {
   point: GrammarPoint;
   count: number; // sentences it appears in
   sentence: string; // first sentence it appears in
-  matched: string; // the part of that sentence the frame matched
+  matched: string; // the part of that sentence the frame matched; empty for points the model found
+  frame?: string; // the catalog frame that matched, e.g. 一边……，一边……
 }
 
 export interface GrammarScanOptions {
@@ -86,7 +87,7 @@ export function sameFrame(front: string, frame: string): boolean {
 
 interface CompiledPoint {
   point: GrammarPoint;
-  patterns: RegExp[];
+  patterns: { frame: string; regex: RegExp }[];
 }
 
 let compiled: CompiledPoint[] | null = null;
@@ -94,7 +95,10 @@ let compiled: CompiledPoint[] | null = null;
 // The catalog points that can be found by pattern matching, with their frames compiled once.
 export function frameMatchers(): CompiledPoint[] {
   compiled ??= grammarPoints.flatMap((point) => {
-    const patterns = (point.frames ?? []).map(compileFrame).filter((r): r is RegExp => r !== null);
+    const patterns = (point.frames ?? []).flatMap((frame) => {
+      const regex = compileFrame(frame);
+      return regex ? [{ frame, regex }] : [];
+    });
     return patterns.length > 0 ? [{ point, patterns }] : [];
   });
   return compiled;
@@ -105,22 +109,22 @@ export function detectGrammar(text: string, { known, levelFloor = 0 }: GrammarSc
   const matchers = frameMatchers().filter(({ point }) => !known?.has(point.id) && point.level > levelFloor);
   const found = new Map<string, GrammarHit>();
   for (const sentence of splitSentences(text)) {
-    const here: { point: GrammarPoint; matched: string }[] = [];
+    const here: { point: GrammarPoint; matched: string; frame: string }[] = [];
     for (const { point, patterns } of matchers) {
-      for (const pattern of patterns) {
-        const m = pattern.exec(sentence);
+      for (const { frame, regex } of patterns) {
+        const m = regex.exec(sentence);
         if (!m) continue;
-        here.push({ point, matched: m[0] });
+        here.push({ point, matched: m[0], frame });
         break;
       }
     }
     // 虽……但 also matches inside 虽然……但是; of two points of one kind the one with the longer span is the real one.
-    for (const { point, matched } of here) {
+    for (const { point, matched, frame } of here) {
       const inside = here.some((o) => o.point.group === point.group && o.matched.length > matched.length && o.matched.includes(matched));
       if (inside) continue;
       const hit = found.get(point.id);
       if (hit) hit.count++;
-      else found.set(point.id, { point, count: 1, sentence, matched });
+      else found.set(point.id, { point, count: 1, sentence, matched, frame });
     }
   }
   return [...found.values()];
