@@ -82,6 +82,7 @@ export interface NewCardRecord {
   front: string;
   level: number | null; // HSK level from the lexicon, null if not in the HSK list
   context: string; // the sentence it was met in
+  matched?: string; // grammar cards: the part of that sentence that shows the point, to mark in it
   status: "queued" | "generated" | "approved" | "failed" | "discarded";
   back?: string;
   problems?: string[];

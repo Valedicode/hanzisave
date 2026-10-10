@@ -33,6 +33,19 @@ const LEVEL_COLOR: Record<number, string> = {
   7: "var(--h7)",
 };
 
+// A sentence with the words that show a grammar point in bold; plain when there is nothing to mark.
+function Marked({ sentence, span }: { sentence: string; span?: string }) {
+  const at = span ? sentence.indexOf(span) : -1;
+  if (!span || at < 0) return <>{sentence}</>;
+  return (
+    <>
+      {sentence.slice(0, at)}
+      <b>{span}</b>
+      {sentence.slice(at + span.length)}
+    </>
+  );
+}
+
 export default function ScanPage() {
   const [prefetch, setPrefetch] = useState<PrefetchProgress>({ ready: 0, total: 0 });
   const [prefetcher] = useState(
@@ -267,6 +280,7 @@ export default function ScanPage() {
       front: grammarFront(hit.point, hit.frame),
       level: hit.point.level,
       context: hit.sentence,
+      matched: hit.matched || undefined,
       status: "queued",
       createdAt: Date.now(),
     }));
@@ -340,6 +354,11 @@ export default function ScanPage() {
                 <span className={styles.badge}>{c.status}</span>
                 {c.exportedAt && <span className={styles.badge}>downloaded</span>}
               </div>
+              {c.type === "grammar" && (
+                <div className={styles.context}>
+                  <Marked sentence={c.context} span={c.matched} />
+                </div>
+              )}
               {c.back ? (
                 draft ? (
                   <textarea
@@ -603,7 +622,6 @@ export default function ScanPage() {
             <summary className={styles.summary}>New grammar ({grammar.length})</summary>
             <div className={styles.detailsBody}>
               {grammar.map((hit) => {
-                const at = hit.matched ? hit.sentence.indexOf(hit.matched) : -1;
                 return (
                   <div key={hit.point.id} className={styles.word}>
                     <span className={styles.pattern}>{hit.point.name}</span>
@@ -613,15 +631,7 @@ export default function ScanPage() {
                     </span>
                     {hit.count > 1 && <span className={styles.hint}>×{hit.count}</span>}
                     <span className={styles.context}>
-                      {at < 0 ? (
-                        hit.sentence
-                      ) : (
-                        <>
-                          {hit.sentence.slice(0, at)}
-                          <b>{hit.matched}</b>
-                          {hit.sentence.slice(at + hit.matched.length)}
-                        </>
-                      )}
+                      <Marked sentence={hit.sentence} span={hit.matched} />
                     </span>
                     <button className={styles.secondary} onClick={() => makeGrammarCards([hit])}>
                       Make card
