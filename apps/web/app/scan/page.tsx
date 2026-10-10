@@ -78,6 +78,7 @@ export default function ScanPage() {
   const scanRun = useRef(0);
   const [preview, setPreview] = useState<PreviewTarget | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectedGrammar, setSelectedGrammar] = useState<Set<string>>(new Set());
   const [cards, setCards] = useState<NewCardRecord[]>([]);
   // Which button started the read, so only that one shows the spinner.
   const [ocrSource, setOcrSource] = useState<"camera" | "upload" | null>(null);
@@ -162,6 +163,7 @@ export default function ScanPage() {
     void checkStructures(knownGrammar);
     setPreview(null);
     setSelected(new Set());
+    setSelectedGrammar(new Set());
   };
 
   // Points rules cannot find (把, 被, 比, complements) are asked of the model, which may only name catalog ids.
@@ -188,6 +190,7 @@ export default function ScanPage() {
   const grammarKnown = async (ids: string[]) => {
     await markGrammarKnown(ids);
     setGrammar((prev) => prev.filter((hit) => !ids.includes(hit.point.id)));
+    setSelectedGrammar((prev) => new Set([...prev].filter((id) => !ids.includes(id))));
   };
 
   const removeFromResult = (surfaces: string[]) => {
@@ -288,6 +291,7 @@ export default function ScanPage() {
     const created = records.map((r, i) => ({ ...r, id: ids[i] as number }));
     setCards((prev) => [...created, ...prev]);
     setGrammar((prev) => prev.filter((hit) => !hits.some((h) => h.point.id === hit.point.id)));
+    setSelectedGrammar((prev) => new Set([...prev].filter((id) => !hits.some((h) => h.point.id === id))));
 
     setGenerating((n) => n + created.length);
     let next = 0;
@@ -340,6 +344,8 @@ export default function ScanPage() {
     () => (result?.newWords ?? []).filter((w) => selected.has(w.surface)),
     [result, selected],
   );
+  const pickedGrammar = useMemo(() => grammar.filter((hit) => selectedGrammar.has(hit.point.id)), [grammar, selectedGrammar]);
+  const allGrammarSelected = grammar.length > 0 && pickedGrammar.length === grammar.length;
   const allSelected = !!result && result.newWords.length > 0 && selectedWords.length === result.newWords.length;
 
   const wordCards = cards.filter((c) => (c.type ?? "word") === "word");
@@ -621,9 +627,39 @@ export default function ScanPage() {
           <details className={styles.details}>
             <summary className={styles.summary}>New grammar ({grammar.length})</summary>
             <div className={styles.detailsBody}>
+              {grammar.length > 0 && (
+                <div className={styles.row}>
+                  <label className={styles.inline}>
+                    <input
+                      type="checkbox"
+                      checked={allGrammarSelected}
+                      onChange={() => setSelectedGrammar(allGrammarSelected ? new Set() : new Set(grammar.map((hit) => hit.point.id)))}
+                    />
+                    Select all
+                  </label>
+                  <button className={styles.primary} disabled={pickedGrammar.length === 0} onClick={() => makeGrammarCards(pickedGrammar)}>
+                    Make cards ({pickedGrammar.length})
+                  </button>
+                  <button className={styles.secondary} disabled={pickedGrammar.length === 0} onClick={() => grammarKnown(pickedGrammar.map((hit) => hit.point.id))}>
+                    I know these ({pickedGrammar.length})
+                  </button>
+                </div>
+              )}
               {grammar.map((hit) => {
                 return (
                   <div key={hit.point.id} className={styles.word}>
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${hit.point.name}`}
+                      checked={selectedGrammar.has(hit.point.id)}
+                      onChange={() =>
+                        setSelectedGrammar((prev) => {
+                          const next = new Set(prev);
+                          if (!next.delete(hit.point.id)) next.add(hit.point.id);
+                          return next;
+                        })
+                      }
+                    />
                     <span className={styles.pattern}>{hit.point.name}</span>
                     {hit.point.en && <span className={styles.hint}>{hit.point.en}</span>}
                     <span className={styles.level} style={{ background: LEVEL_COLOR[hit.point.level] }}>
