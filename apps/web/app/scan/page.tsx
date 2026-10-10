@@ -10,6 +10,7 @@ import { WordPreview, type PreviewTarget } from "./word-preview";
 import { CardRequestError, requestCard } from "@/lib/card-client";
 import { resizeImage } from "@/lib/image-resize";
 import { CardPrefetcher, type PrefetchProgress } from "@/lib/card-prefetch";
+import { grammarDifficulty, textLevel, wordDifficulty } from "@/lib/difficulty";
 import { levelLabel } from "@/lib/lexicon";
 import { loadKnownGrammar, loadKnownWords, markGrammarKnown, markKnown } from "@/lib/known-db";
 import { buildAnkiTsv } from "@/lib/rewrite";
@@ -73,6 +74,7 @@ export default function ScanPage() {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [marked, setMarked] = useState<MarkedSentence[] | null>(null);
   const [grammar, setGrammar] = useState<GrammarHit[]>([]);
+  const [seenGrammar, setSeenGrammar] = useState<GrammarHit[]>([]); // every point found in the text, known or not, for its difficulty
   // The model check for sentence structures runs after the rules; a newer scan makes an older answer stale.
   const [structures, setStructures] = useState<"idle" | "checking" | "failed">("idle");
   const scanRun = useRef(0);
@@ -160,6 +162,7 @@ export default function ScanPage() {
     prefetcher.start(scanned.newWords.map((w) => ({ word: w.surface, sentence: w.sentence.slice(0, 400) })));
     setMarked(markText(text, { known, levelFloor }));
     setGrammar(detectGrammar(text, { known: knownGrammar, levelFloor }));
+    setSeenGrammar(detectGrammar(text));
     void checkStructures(knownGrammar);
     setPreview(null);
     setSelected(new Set());
@@ -178,7 +181,9 @@ export default function ScanPage() {
     try {
       const findings = await findGrammar(text, ids, getAccessCode() || undefined);
       if (run !== scanRun.current) return;
-      setGrammar((prev) => [...prev, ...modelHits(findings).filter((hit) => !prev.some((p) => p.point.id === hit.point.id))]);
+      const found = modelHits(findings);
+      setGrammar((prev) => [...prev, ...found.filter((hit) => !prev.some((p) => p.point.id === hit.point.id))]);
+      setSeenGrammar((prev) => [...prev, ...found.filter((hit) => !prev.some((p) => p.point.id === hit.point.id))]);
       setStructures("idle");
     } catch (e) {
       if (run !== scanRun.current) return;
@@ -344,6 +349,9 @@ export default function ScanPage() {
     () => (result?.newWords ?? []).filter((w) => selected.has(w.surface)),
     [result, selected],
   );
+  const wordLevel = useMemo(() => (marked ? wordDifficulty(marked) : null), [marked]);
+  const grammarLevel = useMemo(() => grammarDifficulty(seenGrammar), [seenGrammar]);
+  const overall = textLevel(wordLevel, grammarLevel);
   const pickedGrammar = useMemo(() => grammar.filter((hit) => selectedGrammar.has(hit.point.id)), [grammar, selectedGrammar]);
   const allGrammarSelected = grammar.length > 0 && pickedGrammar.length === grammar.length;
   const allSelected = !!result && result.newWords.length > 0 && selectedWords.length === result.newWords.length;
@@ -523,6 +531,14 @@ export default function ScanPage() {
               · {result.knownWords} of {result.totalWords} words in the text are already known
             </span>
           </div>
+          {overall !== null && (
+            <div className={styles.hint}>
+              Reads as about {levelLabel(overall)}
+              {wordLevel && ` · words: ${Math.round(wordLevel.covered * 100)}% are ${levelLabel(wordLevel.level)} or lower`}
+              {grammarLevel && ` · grammar: up to ${levelLabel(grammarLevel.level)} (${grammarLevel.points.slice(0, 2).map((p) => p.name.replace(/[“”]/g, "")).join(", ")})`}
+              {structures === "checking" && " · still checking sentence structures"}
+            </div>
+          )}
           <div className={styles.legend}>
             <span className={styles.legendItem}>
               <span className={`${styles.dot} ${styles.dotNew}`} />
