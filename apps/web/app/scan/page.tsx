@@ -14,6 +14,7 @@ import { levelLabel } from "@/lib/lexicon";
 import { loadKnownGrammar, loadKnownWords, markGrammarKnown, markKnown } from "@/lib/known-db";
 import { buildAnkiTsv } from "@/lib/rewrite";
 import { findGrammar, GrammarRequestError } from "@/lib/grammar-client";
+import { grammarFront, grammarRequest } from "@/lib/grammar-cards";
 import { detectGrammar, modelHits, structureCandidates, type GrammarHit } from "@/lib/grammar-detect";
 import { markText, scanText, type MarkedSentence, type NewWord, type ScanResult } from "@/lib/scan";
 
@@ -208,7 +209,15 @@ export default function ScanPage() {
     setBusy(card.id!, true);
     try {
       const sentence = card.context.slice(0, 400);
-      const back = fresh ? await prefetcher.fresh(card.front, sentence) : await prefetcher.request(card.front, sentence);
+      let back: string;
+      if (card.type === "grammar") {
+        // Grammar cards are made on request, not ahead of time, so there is nothing to reuse.
+        const req = card.pointId ? grammarRequest(card.pointId, card.front, card.context) : null;
+        if (!req) throw new CardRequestError("unknown grammar point", 0);
+        back = await requestCard(req, getAccessCode() || undefined);
+      } else {
+        back = fresh ? await prefetcher.fresh(card.front, sentence) : await prefetcher.request(card.front, sentence);
+      }
       await patchCard(card.id!, { status: "generated", back, problems: undefined });
     } catch (e) {
       const err = e instanceof CardRequestError ? e : new CardRequestError(String(e), 0);
@@ -249,8 +258,38 @@ export default function ScanPage() {
     );
   };
 
+  const makeGrammarCards = async (hits: GrammarHit[]) => {
+    if (hits.length === 0) return;
+    setError("");
+    const records: NewCardRecord[] = hits.map((hit) => ({
+      type: "grammar" as const,
+      pointId: hit.point.id,
+      front: grammarFront(hit.point, hit.frame),
+      level: hit.point.level,
+      context: hit.sentence,
+      status: "queued",
+      createdAt: Date.now(),
+    }));
+    const ids = await db.new_cards.bulkAdd(records, { allKeys: true });
+    const created = records.map((r, i) => ({ ...r, id: ids[i] as number }));
+    setCards((prev) => [...created, ...prev]);
+    setGrammar((prev) => prev.filter((hit) => !hits.some((h) => h.point.id === hit.point.id)));
+
+    setGenerating((n) => n + created.length);
+    let next = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, created.length) }, async () => {
+        while (next < created.length) {
+          await generate(created[next++]);
+          setGenerating((n) => n - 1);
+        }
+      }),
+    );
+  };
+
   const approve = async (card: NewCardRecord) => {
-    await markKnown([card.front]);
+    if (card.type === "grammar" && card.pointId) await markGrammarKnown([card.pointId]);
+    else await markKnown([card.front]);
     await patchCard(card.id!, { status: "approved" });
   };
 
@@ -583,6 +622,9 @@ export default function ScanPage() {
                         </>
                       )}
                     </span>
+                    <button className={styles.secondary} onClick={() => makeGrammarCards([hit])}>
+                      Make card
+                    </button>
                     <button className={styles.secondary} onClick={() => grammarKnown([hit.point.id])}>
                       I know it
                     </button>

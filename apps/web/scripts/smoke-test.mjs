@@ -5,6 +5,7 @@ import { segment } from "../lib/segment.ts";
 import { grammarPoint, grammarPoints, pointsUpToLevel } from "../lib/grammar.ts";
 import { compileFrame, detectGrammar, frameMatchers, modelHits, sameFrame, structureCandidates } from "../lib/grammar-detect.ts";
 import { buildGrammarPrompt, parseGrammarReply } from "../lib/grammar-prompt.ts";
+import { grammarFront, grammarRequest, levelParam } from "../lib/grammar-cards.ts";
 import { matchDeckFront } from "../lib/grammar-known.ts";
 import { analyze } from "../lib/analyze.ts";
 import { supportedMax } from "../lib/level.ts";
@@ -854,6 +855,27 @@ import { join } from "node:path";
   assert.ok(open.some((p) => p.id === "g184"), "“把”字句 has no frame, so it goes to the model");
   assert.ok(!structureCandidates({ known: new Set(["g184"]) }).some((p) => p.id === "g184"));
   assert.deepEqual(modelHits([{ id: "g184", sentence: "他把书放在桌子上。" }, { id: "nope", sentence: "x" }]).map((h) => [h.point.id, h.matched]), [["g184", ""]]);
+}
+
+// Grammar cards: the front is the pattern, the request carries the catalog level and, for structures, the use.
+{
+  const hit = detectGrammar("我一边吃饭，一边看书。")[0];
+  assert.equal(hit.frame, "一边……，一边……");
+  assert.equal(grammarFront(hit.point, hit.frame), "一边……一边……", "the front is written like the deck's");
+  assert.equal(grammarFront(grammarPoint("g184"), undefined), "把字句1", "quotes are dropped from structure names");
+  assert.equal(levelParam(3), "3");
+  assert.equal(levelParam(7), "7-9");
+
+  const pattern = grammarRequest("g94", "又……又……", "他又高又帅。");
+  assert.deepEqual(pattern, { item: "又……又……", type: "grammar", context: "他又高又帅。", hsk: "2" });
+  const structure = grammarRequest("g106", "比较句2", "她比我高三厘米。");
+  assert.ok(structure.item.startsWith("比较句2 (") && structure.item.length <= 60, "the use is added within the item limit: " + structure.item);
+  assert.equal(grammarRequest("g500", "x", "y").hsk, "7-9");
+  assert.equal(grammarRequest("nope", "x", "y"), null);
+  for (const point of grammarPoints) {
+    const req = grammarRequest(point.id, grammarFront(point, point.frames?.[0]), "句");
+    assert.ok(req.item.length <= 60 && req.item.length > 0, point.id + " item fits");
+  }
 }
 
 console.log("smoke-test: all checks passed");
