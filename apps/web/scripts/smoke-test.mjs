@@ -20,6 +20,7 @@ import { createOpenAiProvider } from "../lib/llm/openai.ts";
 import { buildAnkiTsv, splitChanged, toHtmlField } from "../lib/rewrite.ts";
 import { mergeDeck } from "../lib/merge-deck.ts";
 import { markText, scanText } from "../lib/scan.ts";
+import { levelLabel, lookup } from "../lib/lexicon.ts";
 import { addPatternPinyin, withPatternPinyin } from "../lib/pattern-pinyin.ts";
 import { planComponentCards, splitComponents } from "../lib/components.ts";
 import { estimateRemainingMs, etaTracker, formatEta } from "../lib/eta.ts";
@@ -708,6 +709,42 @@ import { join } from "node:path";
   const accepted = new Set(["绑定"]);
   const second = planComponentCards(phrases, new Set(), (w) => w === "银行卡" || accepted.has(w));
   assert.deepEqual(second.add.map((a) => a.front).sort(), ["绑定", "银行卡"]);
+// Grammar cards: the Structure lines get pinyin on the hanzi only; other sections are left alone.
+{
+  const NL = String.fromCharCode(10);
+  const fake = (run) => "<" + run + ">";
+  const card = [
+    "Pattern: S + 把 + O + V + complement/了",
+    "Pinyin: bǎ",
+    "Structure:",
+    "- S + 把 + O + V + 了 (finished doing V to O)",
+    "- S + 没 + 把 + O + V + complement (negation goes before 把)",
+    "Watch out:",
+    "- The verb can't stand alone: *我把饭吃 → 我把饭吃完了.",
+    "Compare: 被字句 (passive)",
+    "Example: 我把饭吃完了。",
+  ].join(NL);
+  const out = addPatternPinyin(card, fake).split(NL);
+  assert.equal(out[3], "- S + 把 + O + V + 了 [S + <把> + O + V + le] (finished doing V to O)");
+  assert.equal(out[4], "- S + 没 + 把 + O + V + complement [S + <没> + <把> + O + V + complement] (negation goes before 把)");
+  assert.equal(out[0], card.split(NL)[0], "the Pattern line is not changed");
+  assert.equal(out[6], card.split(NL)[6], "Watch out lines are not changed");
+  assert.equal(addPatternPinyin(addPatternPinyin(card, fake), fake), addPatternPinyin(card, fake), "idempotent");
+// HSK 3.0 words beyond level 6: found whole by the segmenter, level 7, and hidden by a level floor of 7.
+{
+  assert.equal(lookup("爱")?.level, 1, "a word in the HSK 1-6 lexicon keeps its level");
+  assert.equal(lookup("安眠药")?.level, 7);
+  assert.equal(lookup("有一些")?.level, 1, "an optional character in brackets is joined: 有（一）些");
+  for (const junk of ["们朋友们", "家科学家", "第第二", "称1"]) assert.equal(lookup(junk), undefined, junk + " is not a word");
+  assert.equal(levelLabel(7), "HSK 7–9");
+  assert.equal(levelLabel(4), "HSK 4");
+
+  const text = "他吃了安眠药。";
+  const seg = segment(text).map((w) => w.surface);
+  assert.ok(seg.includes("安眠药"), "kept whole, not split into pieces");
+  const found = scanText(text, { known: new Set(), levelFloor: 2 }).newWords.find((w) => w.surface === "安眠药");
+  assert.equal(found?.level, 7);
+  assert.ok(!scanText(text, { known: new Set(), levelFloor: 7 }).newWords.some((w) => w.surface === "安眠药"), "a floor of 7 hides the whole 7-9 band");
 }
 
 console.log("smoke-test: all checks passed");

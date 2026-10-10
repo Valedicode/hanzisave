@@ -10,6 +10,7 @@ import { WordPreview, type PreviewTarget } from "./word-preview";
 import { CardRequestError, requestCard } from "@/lib/card-client";
 import { resizeImage } from "@/lib/image-resize";
 import { CardPrefetcher, type PrefetchProgress } from "@/lib/card-prefetch";
+import { levelLabel } from "@/lib/lexicon";
 import { loadKnownWords, markKnown } from "@/lib/known-db";
 import { buildAnkiTsv } from "@/lib/rewrite";
 import { markText, scanText, type MarkedSentence, type NewWord, type ScanResult } from "@/lib/scan";
@@ -26,6 +27,7 @@ const LEVEL_COLOR: Record<number, string> = {
   4: "var(--h4)",
   5: "var(--h5)",
   6: "var(--h6)",
+  7: "var(--h7)",
 };
 
 export default function ScanPage() {
@@ -399,9 +401,9 @@ export default function ScanPage() {
           <label className={styles.inline}>
             Hide HSK words up to level
             <select value={levelFloor} onChange={(e) => changeFloor(Number(e.target.value))}>
-              {[0, 1, 2, 3, 4, 5, 6].map((n) => (
+              {[0, 1, 2, 3, 4, 5, 6, 7].map((n) => (
                 <option key={n} value={n}>
-                  {n === 0 ? "none" : n}
+                  {n === 0 ? "none" : n === 7 ? "7–9" : n}
                 </option>
               ))}
             </select>
@@ -508,7 +510,7 @@ export default function ScanPage() {
                   />
                   <span className={styles.hanzi}>{w.surface}</span>
                   <span className={styles.level} style={{ background: w.level ? LEVEL_COLOR[w.level] : "var(--oov)" }}>
-                    {w.level ? `HSK ${w.level}` : "not in HSK"}
+                    {w.level ? levelLabel(w.level) : "not in HSK"}
                   </span>
                   {w.count > 1 && <span className={styles.hint}>×{w.count}</span>}
                   <span className={styles.context}>{w.sentence}</span>

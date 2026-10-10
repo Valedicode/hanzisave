@@ -1,9 +1,10 @@
-// Adds pinyin to the lines under "Patterns:" on a card Back:
+// Adds pinyin to the lines under "Patterns:" (word cards) and "Structure:" (grammar cards) on a card Back:
 //   - 制定/做 + 计划 (make a plan)
 // becomes
 //   - 制定/做 + 计划 [zhìdìng/zuò + jìhuà] (make a plan)
 // Pinyin goes in square brackets so the English gloss keeps its parentheses. The pinyin is
 // computed, not asked of the model, so it is the same for old and new cards and costs nothing.
+// On a grammar card the slots (S, O, V, Adj) stay as they are and only the hanzi gain pinyin.
 
 import { segment } from "./segment";
 
@@ -25,6 +26,7 @@ const PARTICLES: Record<string, string> = {
 export type HanToPinyin = (hanRun: string) => string;
 
 const BULLET = /^(\s*-\s+)(.*)$/;
+const SECTION = /^(Patterns|Structure):/;
 const HAS_PINYIN = /\[[^\]]*\]/;
 const HAN_RUN = /\p{Script=Han}+/gu;
 
@@ -49,7 +51,7 @@ export function addPatternPinyin(back: string, toPinyin: HanToPinyin): string {
   return back
     .split("\n")
     .map((line) => {
-      if (line.trim().startsWith("Patterns:")) {
+      if (SECTION.test(line.trim())) {
         inPatterns = true;
         return line;
       }
