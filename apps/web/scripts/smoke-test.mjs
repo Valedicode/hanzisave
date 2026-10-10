@@ -831,6 +831,8 @@ import { join } from "node:path";
   assert.deepEqual(parse('{"points":[{"id":"g999","sentence":"他把书放在桌子上。"}]}'), [], "an id that was not asked about is dropped");
   assert.deepEqual(parse('{"points":[{"id":"g38","sentence":"我比他高。"}]}'), [], "a sentence that is not in the text is dropped");
   assert.deepEqual(parse('{"points":[{"id":"g184","sentence":"他把书放在桌子上。"},{"id":"g184","sentence":"今天天气很好。"}]}').length, 1, "one entry per id");
+  assert.deepEqual(parse('{"points":[{"id":"g184","sentence":"他把书放在桌子上。","words":"把书放在桌子上"}]}'), [{ id: "g184", sentence: "他把书放在桌子上。", words: "把书放在桌子上" }], "the span the model names is kept");
+  assert.deepEqual(parse('{"points":[{"id":"g184","sentence":"他把书放在桌子上。","words":"把画挂在墙上"}]}'), [{ id: "g184", sentence: "他把书放在桌子上。" }], "a span that is not in the sentence is dropped");
   assert.deepEqual(parse('{"points":[]}'), []);
   assert.equal(parse('{"points":"g184"}'), null);
   assert.equal(parse("no"), null);
@@ -855,6 +857,8 @@ import { join } from "node:path";
   assert.ok(open.some((p) => p.id === "g184"), "“把”字句 has no frame, so it goes to the model");
   assert.ok(!structureCandidates({ known: new Set(["g184"]) }).some((p) => p.id === "g184"));
   assert.deepEqual(modelHits([{ id: "g184", sentence: "他把书放在桌子上。" }, { id: "nope", sentence: "x" }]).map((h) => [h.point.id, h.matched]), [["g184", ""]]);
+  assert.equal(modelHits([{ id: "g184", sentence: "他把书放在桌子上。", words: "把书放在桌子上" }])[0].matched, "把书放在桌子上", "the model's span is marked like a frame match");
+  assert.equal(modelHits([{ id: "g184", sentence: "他把书放在桌子上。", words: "不在句子里" }])[0].matched, "", "a span outside the sentence is ignored");
 }
 
 // Grammar cards: the front is the pattern, the request carries the catalog level and, for structures, the use.
