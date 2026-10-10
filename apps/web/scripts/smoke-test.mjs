@@ -682,4 +682,27 @@ import { join } from "node:path";
   assert.equal(h.stored.get("a|sa"), "card:a");
 }
 
+// Grammar cards: the Structure lines get pinyin on the hanzi only; other sections are left alone.
+{
+  const NL = String.fromCharCode(10);
+  const fake = (run) => "<" + run + ">";
+  const card = [
+    "Pattern: S + 把 + O + V + complement/了",
+    "Pinyin: bǎ",
+    "Structure:",
+    "- S + 把 + O + V + 了 (finished doing V to O)",
+    "- S + 没 + 把 + O + V + complement (negation goes before 把)",
+    "Watch out:",
+    "- The verb can't stand alone: *我把饭吃 → 我把饭吃完了.",
+    "Compare: 被字句 (passive)",
+    "Example: 我把饭吃完了。",
+  ].join(NL);
+  const out = addPatternPinyin(card, fake).split(NL);
+  assert.equal(out[3], "- S + 把 + O + V + 了 [S + <把> + O + V + le] (finished doing V to O)");
+  assert.equal(out[4], "- S + 没 + 把 + O + V + complement [S + <没> + <把> + O + V + complement] (negation goes before 把)");
+  assert.equal(out[0], card.split(NL)[0], "the Pattern line is not changed");
+  assert.equal(out[6], card.split(NL)[6], "Watch out lines are not changed");
+  assert.equal(addPatternPinyin(addPatternPinyin(card, fake), fake), addPatternPinyin(card, fake), "idempotent");
+}
+
 console.log("smoke-test: all checks passed");
