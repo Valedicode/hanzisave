@@ -179,6 +179,10 @@ import { join } from "node:path";
   assert.ok(checkCardFormat("**Pinyin:** x", "word").problems.includes("contains markdown"));
   const gaveUp = checkCardFormat(word.replace("Translation: to take a taxi", "Translation: unsure"), "word");
   assert.deepEqual(gaveUp.problems, ["Translation: is unsure"]);
+  const withUsage = (text) => word.replace("Patterns:", "Usage: " + text + NL + "Patterns:");
+  assert.deepEqual(checkCardFormat(withUsage("Only in set words such as 免费; not a general negator."), "word"), { ok: true, problems: [] }, "a Usage line is optional but allowed");
+  assert.deepEqual(checkCardFormat(withUsage("-"), "word").problems, ["Usage: is empty"], "a Usage line with nothing in it is rejected");
+  assert.deepEqual(checkCardFormat(withUsage("unsure"), "word").problems, ["Usage: is empty"]);
   const grammar = checkCardFormat(word, "grammar");
   assert.ok(grammar.problems.includes("missing Pattern:") && grammar.problems.includes("grammar card needs two Example lines"));
 }

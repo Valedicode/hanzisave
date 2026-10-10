@@ -49,6 +49,10 @@ export function checkCardFormat(back: string, type: CardType): FormatCheck {
     const line = lines.find((l) => l.startsWith(label));
     if (line && /^unsure\.?$/i.test(line.slice(label.length).trim())) problems.push(`${label} is unsure`);
   }
+  // Usage is optional; when it is there it has to say something (the spec says to leave the line out otherwise).
+  for (const line of lines.filter((l) => l.startsWith("Usage:"))) {
+    if (/^(-|unsure\.?)?$/i.test(line.slice("Usage:".length).trim())) problems.push("Usage: is empty");
+  }
   if (/```/.test(back)) problems.push("contains a code fence");
   if (/^\s*(\*\*|#{1,3}\s)/m.test(back)) problems.push("contains markdown");
   return { ok: problems.length === 0, problems };
