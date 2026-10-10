@@ -22,34 +22,66 @@ const MAX_GAP = 20;
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const HAN_ONLY = /^\p{Script=Han}+$/u;
 
-// A frame such as "不仅/不光……，还/而且……" becomes a regex. The notation is: "/" separates
-// alternatives, （…） is optional, "……" is a stretch of anything. Frames with slots (X, Y, 动词) or
-// fewer than two required anchors are too loose to match by pattern and give null.
-export function compileFrame(frame: string): RegExp | null {
-  const parts: string[] = [];
+// One piece of a frame: a stretch of anything (……), or literal alternatives that are required or optional.
+export type FramePart = { gap: true } | { alts: string[]; optional: boolean };
+
+// Reads a frame such as "不仅/不光……，还/而且……". The notation is: "/" separates alternatives,
+// （…） is optional, "……" is a stretch of anything. Frames with slots (X, Y, 动词) or fewer than
+// two required anchors are too loose to match by pattern and give null. A leading or trailing
+// gap carries no information and is dropped.
+export function parseFrame(frame: string): FramePart[] | null {
+  const parts: FramePart[] = [];
   let anchors = 0;
-  const cleaned = frame.replace(/[，,\s]/g, "");
+  const cleaned = frame.replace(/[，,\s、？?。！!]/g, "").replace(/\.{2,}|⋯+/g, "…");
   const tokens = cleaned.match(/…+|（[^）]*）|\([^)]*\)|[^…（(]+/g);
   if (!tokens) return null;
   for (const token of tokens) {
     if (token.startsWith("…")) {
-      if (parts.length > 0 && parts[parts.length - 1] !== "GAP") parts.push("GAP");
+      if (parts.length > 0 && !("gap" in parts[parts.length - 1])) parts.push({ gap: true });
       continue;
     }
     const optional = token.startsWith("（") || token.startsWith("(");
     const body = optional ? token.slice(1, -1) : token;
-    const alternatives = body.split("/").filter(Boolean);
-    if (alternatives.length === 0 || !alternatives.every((a) => HAN_ONLY.test(a))) return null;
-    const group = `(?:${alternatives.map(escape).join("|")})`;
-    if (optional) parts.push(`${group}?`);
-    else {
-      parts.push(group);
-      anchors++;
-    }
+    const alts = body.split("/").filter(Boolean);
+    if (alts.length === 0 || !alts.every((a) => HAN_ONLY.test(a))) return null;
+    parts.push({ alts, optional });
+    if (!optional) anchors++;
   }
   if (anchors < 2) return null;
-  while (parts[parts.length - 1] === "GAP") parts.pop();
-  return new RegExp(parts.map((p) => (p === "GAP" ? `.{1,${MAX_GAP}}?` : p)).join(""));
+  while (parts.length > 0 && "gap" in parts[parts.length - 1]) parts.pop();
+  return parts;
+}
+
+// A frame as a regex that finds it in a sentence.
+export function compileFrame(frame: string): RegExp | null {
+  const parts = parseFrame(frame);
+  if (!parts) return null;
+  return new RegExp(
+    parts
+      .map((p) => {
+        if ("gap" in p) return `.{1,${MAX_GAP}}?`;
+        const group = `(?:${p.alts.map(escape).join("|")})`;
+        return p.optional ? `${group}?` : group;
+      })
+      .join(""),
+  );
+}
+
+// Whether a pattern as it is written on a card front (又…又…) is the frame of a catalog point:
+// the same required pieces in the same order with gaps in the same places, where each piece on
+// the front is one of the frame's alternatives. 越来越…… is not 越……越……: it has no gap between.
+export function sameFrame(front: string, frame: string): boolean {
+  const a = parseFrame(front);
+  // With the optional parts out, the gaps on either side of one run together.
+  const b = parseFrame(frame)
+    ?.filter((p) => "gap" in p || !p.optional)
+    .filter((p, i, all) => !("gap" in p && i > 0 && "gap" in all[i - 1]));
+  if (!a || !b || a.length !== b.length) return false;
+  return a.every((p, i) => {
+    const q = b[i];
+    if ("gap" in p || "gap" in q) return "gap" in p && "gap" in q;
+    return p.alts.every((alt) => q.alts.includes(alt));
+  });
 }
 
 interface CompiledPoint {
