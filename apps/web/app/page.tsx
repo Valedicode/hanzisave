@@ -9,6 +9,7 @@ const HSK_LEGEND = [
   { label: "HSK 4", color: "var(--h4)" },
   { label: "HSK 5", color: "var(--h5)" },
   { label: "HSK 6", color: "var(--h6)" },
+  { label: "HSK 7–9", color: "var(--h7)" },
   { label: "Unknown", color: "var(--oov)" },
 ];
 
@@ -45,7 +46,7 @@ export default function Landing() {
 
           <h1 className={styles.title}>Turn anything you read into flashcards at your level</h1>
           <p className={styles.lead}>
-            Paste an article or photograph a page. HanziSave grades every word on the HSK 1–6 scale, finds the ones you
+            Paste an article or photograph a page. HanziSave grades every word on the HSK 3.0 scale, finds the ones you
             do not know yet, and turns them into cards for your Anki deck.
           </p>
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getAccessCode } from "@/lib/access-code";
 import { getGloss, GlossRequestError } from "@/lib/gloss";
 import type { Gloss } from "@/lib/gloss-schema";
+import { levelLabel } from "@/lib/lexicon";
 import { AccessNotice } from "../access-notice";
 import { Spinner } from "../spinner";
 import styles from "./word-preview.module.css";
@@ -15,6 +16,7 @@ const LEVEL_COLOR: Record<number, string> = {
   4: "var(--h4)",
   5: "var(--h5)",
   6: "var(--h6)",
+  7: "var(--h7)",
 };
 
 export interface PreviewTarget {
@@ -70,7 +72,7 @@ export function WordPreview({
         <span className={styles.word}>{target.word}</span>
         {target.level !== null && (
           <span className={styles.level} style={{ background: LEVEL_COLOR[target.level] }}>
-            HSK {target.level}
+            {levelLabel(target.level)}
           </span>
         )}
         <button type="button" className={styles.close} onClick={onClose} aria-label="Close preview">
