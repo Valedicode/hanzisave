@@ -19,6 +19,7 @@ import { createOpenAiProvider } from "../lib/llm/openai.ts";
 import { buildAnkiTsv, splitChanged, toHtmlField } from "../lib/rewrite.ts";
 import { mergeDeck } from "../lib/merge-deck.ts";
 import { markText, scanText } from "../lib/scan.ts";
+import { levelLabel, lookup } from "../lib/lexicon.ts";
 import { addPatternPinyin, withPatternPinyin } from "../lib/pattern-pinyin.ts";
 import { planComponentCards, splitComponents } from "../lib/components.ts";
 import { estimateRemainingMs, etaTracker, formatEta } from "../lib/eta.ts";
@@ -680,6 +681,23 @@ import { join } from "node:path";
   assert.equal(await h.p.request("a", "sa"), "old");
   assert.equal(await h.p.fresh("a", "sa"), "card:a");
   assert.equal(h.stored.get("a|sa"), "card:a");
+}
+
+// HSK 3.0 words beyond level 6: found whole by the segmenter, level 7, and hidden by a level floor of 7.
+{
+  assert.equal(lookup("爱")?.level, 1, "a word in the HSK 1-6 lexicon keeps its level");
+  assert.equal(lookup("安眠药")?.level, 7);
+  assert.equal(lookup("有一些")?.level, 1, "an optional character in brackets is joined: 有（一）些");
+  for (const junk of ["们朋友们", "家科学家", "第第二", "称1"]) assert.equal(lookup(junk), undefined, junk + " is not a word");
+  assert.equal(levelLabel(7), "HSK 7–9");
+  assert.equal(levelLabel(4), "HSK 4");
+
+  const text = "他吃了安眠药。";
+  const seg = segment(text).map((w) => w.surface);
+  assert.ok(seg.includes("安眠药"), "kept whole, not split into pieces");
+  const found = scanText(text, { known: new Set(), levelFloor: 2 }).newWords.find((w) => w.surface === "安眠药");
+  assert.equal(found?.level, 7);
+  assert.ok(!scanText(text, { known: new Set(), levelFloor: 7 }).newWords.some((w) => w.surface === "安眠药"), "a floor of 7 hides the whole 7-9 band");
 }
 
 console.log("smoke-test: all checks passed");

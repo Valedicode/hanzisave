@@ -18,6 +18,7 @@
   --h4: #ee8a3a;
   --h5: #e1573d;
   --h6: #be2e42;
+  --h7: #7a4fc4;
 }
 
 /* Dark values apply for the system setting unless light was chosen, or when dark was chosen. */
