@@ -6,6 +6,7 @@ import { grammarPoint, grammarPoints, pointsUpToLevel } from "../lib/grammar.ts"
 import { compileFrame, detectGrammar, frameMatchers, modelHits, sameFrame, structureCandidates } from "../lib/grammar-detect.ts";
 import { buildGrammarPrompt, parseGrammarReply } from "../lib/grammar-prompt.ts";
 import { grammarFront, grammarRequest, levelParam } from "../lib/grammar-cards.ts";
+import { COVERAGE, grammarDifficulty, textLevel, wordDifficulty } from "../lib/difficulty.ts";
 import { matchDeckFront } from "../lib/grammar-known.ts";
 import { analyze } from "../lib/analyze.ts";
 import { supportedMax } from "../lib/level.ts";
@@ -887,6 +888,27 @@ import { join } from "node:path";
     const req = grammarRequest(point.id, grammarFront(point, point.frames?.[0]), "句");
     assert.ok(req.item.length <= 60 && req.item.length > 0, point.id + " item fits");
   }
+}
+
+// Text difficulty: the word level covers most of the words, the grammar level is the highest point found.
+{
+  const mark = (levels) => [{ text: "x", words: levels.map((level) => ({ surface: "字", level, status: level === "p" ? "other" : "known" })) }];
+  const ofLevels = (counts) => mark(Object.entries(counts).flatMap(([level, n]) => Array(n).fill(level === "null" ? null : Number(level))));
+  assert.equal(wordDifficulty(ofLevels({ 1: 10, 2: 5 })).level, 2, "all words covered at level 2");
+  assert.equal(wordDifficulty(ofLevels({ 1: 90, 4: 10 })).level, 1, "90% at level 1 is enough");
+  assert.equal(wordDifficulty(ofLevels({ 1: 89, 4: 11 })).level, 4, "89% at level 1 is not");
+  assert.equal(wordDifficulty(ofLevels({ 3: 10, null: 10 })).words, 10, "words outside the HSK list are not counted");
+  assert.equal(wordDifficulty(ofLevels({ 1: 7 })), null, "too short a text says nothing");
+  assert.equal(COVERAGE, 0.9);
+
+  const hit = (id) => detectGrammar("他一边吃饭，一边看书。")[0] && { point: grammarPoint(id), count: 1, sentence: "", matched: "" };
+  const g = grammarDifficulty([hit("g94"), hit("g184"), hit("g328")]);
+  assert.equal(g.level, 5);
+  assert.deepEqual(g.points.map((p) => p.id), ["g328"], "the point that sets the level is named");
+  assert.equal(grammarDifficulty([]), null);
+  assert.equal(textLevel({ level: 3 }, { level: 5 }), 5, "the harder of words and grammar");
+  assert.equal(textLevel({ level: 4 }, null), 4);
+  assert.equal(textLevel(null, null), null);
 }
 
 console.log("smoke-test: all checks passed");
