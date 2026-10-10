@@ -93,6 +93,13 @@
   font-weight: 800;
 }
 
+.brief {
+  flex: 1 0 100%;
+  font-size: 13px;
+  color: var(--ink2);
+  line-height: 1.4;
+}
+
 .word {
   display: flex;
   flex-wrap: wrap;

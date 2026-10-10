@@ -869,6 +869,7 @@ import { join } from "node:path";
   assert.equal(grammarFront(grammarPoint("g184"), undefined), "把字句1 (把 sentence (disposal))", "quotes are dropped and the English name added");
   assert.equal(grammarFront(grammarPoint("g105"), undefined), "连动句1 (serial verb sentence)");
   assert.ok(grammarPoints.every((p) => p.frames || p.en), "every structure has an English name");
+  assert.ok(grammarPoints.filter((p) => p.en).every((p) => p.brief && p.brief.length < 120), "every English name has a short explanation");
   assert.equal(levelParam(3), "3");
   assert.equal(levelParam(7), "7-9");
 
