@@ -1,0 +1,62 @@
+.title {
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.text {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--ink2);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.button:hover {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.button:focus-within,
+.button:focus-visible {
+  outline: 3px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.message {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--brand-deep);
+}

@@ -1,0 +1,26 @@
+.toggle {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--ink2);
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.toggle:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.toggle:focus-visible {
+  outline: 3px solid var(--brand);
+  outline-offset: 3px;
+}

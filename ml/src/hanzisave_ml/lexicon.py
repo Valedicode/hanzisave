@@ -43,5 +43,23 @@ class Lexicon:
     def level(self, word: str) -> int:
         return self.word_levels.get(word, OOV)
 
+    def split_oov(self, token: str) -> list[str] | None:
+        """Greedy longest-match split of an OOV token into known lexicon words.
+
+        jieba sometimes merges two known words into one unknown token
+        (e.g. '工作效率' -> ['工作', '效率'] would both be known). Returns
+        the sub-words if the whole token is covered, else None.
+        """
+        out, i, n = [], 0, len(token)
+        while i < n:
+            for j in range(n, i, -1):
+                if token[i:j] in self.word_levels:
+                    out.append(token[i:j])
+                    i = j
+                    break
+            else:
+                return None
+        return out
+
     def __len__(self) -> int:
         return len(self.word_levels)

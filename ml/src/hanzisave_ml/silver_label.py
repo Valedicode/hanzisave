@@ -48,13 +48,21 @@ class SentenceStats:
 def score(sentence: str, lexicon: Lexicon) -> SentenceStats:
     tokens = tokenize(sentence)
     levels, oov = [], []
+    n_words = 0
     for t in tokens:
         lv = lexicon.level(t)
-        if lv == OOV:
-            oov.append(t)
-        else:
+        if lv != OOV:
             levels.append(lv)
-    return SentenceStats(n_words=len(tokens), levels=levels, oov_words=oov)
+            n_words += 1
+            continue
+        sub_words = lexicon.split_oov(t)
+        if sub_words is None:
+            oov.append(t)
+            n_words += 1
+        else:
+            levels.extend(lexicon.level(w) for w in sub_words)
+            n_words += len(sub_words)
+    return SentenceStats(n_words=n_words, levels=levels, oov_words=oov)
 
 
 def label(stats: SentenceStats, rule: str = "max", min_support: int = 2) -> int:

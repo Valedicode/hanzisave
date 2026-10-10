@@ -1,0 +1,16 @@
+.notice {
+  padding: 12px 14px;
+  border: 1px solid var(--h4);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.link {
+  color: var(--brand-deep);
+  font-weight: 900;
+  text-decoration: underline;
+}

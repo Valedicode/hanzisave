@@ -1,0 +1,91 @@
+:root {
+  color-scheme: light;
+  --bg: #f3f7f7;
+  --panel: #ffffff;
+  --ink: #14302f;
+  --ink2: #5e7371;
+  --line: #dce6e5;
+  --hover: #eaf2f1;
+  --shadow: 0 10px 30px rgba(20, 48, 47, 0.1);
+  --brand: #0e9a9a;
+  --brand-ink: #ffffff;
+  --brand-soft: #d8f1f0;
+  --brand-deep: #0a7c7c;
+  --oov: #9aaaa9;
+  --h1: #2eae69;
+  --h2: #8dbb3b;
+  --h3: #e3b321;
+  --h4: #ee8a3a;
+  --h5: #e1573d;
+  --h6: #be2e42;
+  --h7: #7a4fc4;
+}
+
+/* Dark values apply for the system setting unless light was chosen, or when dark was chosen. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1918;
+    --panel: #162423;
+    --ink: #eaf3f2;
+    --ink2: #95a9a7;
+    --line: #243836;
+    --hover: #1d2f2e;
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    --brand: #2bc7c2;
+    --brand-ink: #05201f;
+    --brand-soft: #123f3d;
+    --brand-deep: #5cdcd7;
+    --oov: #66797a;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0e1918;
+  --panel: #162423;
+  --ink: #eaf3f2;
+  --ink2: #95a9a7;
+  --line: #243836;
+  --hover: #1d2f2e;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --brand: #2bc7c2;
+  --brand-ink: #05201f;
+  --brand-soft: #123f3d;
+  --brand-deep: #5cdcd7;
+  --oov: #66797a;
+  color-scheme: dark;
+}
+
+html {
+  height: 100%;
+}
+
+html {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  max-width: 100vw;
+  /* clip, not hidden: hidden would make the body a scroll container and break the sticky header */
+  overflow-x: clip;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+  background: var(--bg);
+  font-family: "Nunito", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
