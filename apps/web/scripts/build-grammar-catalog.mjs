@@ -6,16 +6,18 @@
 // sentence and phrase types. Only the entries a learner studies as a pattern are kept; the rest
 // belong with the word lexicon or are too abstract to card.
 //
-// Point shape: { id, level, group, name, en?, desc, frames? }
+// Point shape: { id, level, group, name, en?, brief?, desc, frames? }
 //   id      "g" + the row number of the list, stable across rebuilds
 //   level   1-6, or 7 for the whole 7-9 band
 //   name    what the point is called on a card front or in a list
 //   en      English name of a structure or clause type; fixed patterns (又……又……) have none
+//   brief   one line of English saying what the structure does (scripts/grammar-notes.mjs)
 //   desc    the formal description from the list (no explanations or examples exist in the source)
 //   frames  surface templates such as "又……又……", for points that can be found by pattern matching
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { CLAUSE_NOTES, NOTES } from "./grammar-notes.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.resolve(__dirname, "../../../ml/data/lexicon/hsk30-grammar.csv");
@@ -181,6 +183,11 @@ for (const r of data) {
   const en = englishOf(point.name);
   if (en) point.en = en;
   else if (frames.length === 0) throw new Error(`no English name for ${point.id} ${point.name}`);
+  if (en) {
+    const brief = NOTES[point.id] ?? CLAUSE_NOTES[point.name.replace(/\d+$/, "").split("：")[0]];
+    if (!brief) throw new Error(`no explanation for ${point.id} ${point.name}`);
+    point.brief = brief;
+  }
   points.push(point);
 }
 

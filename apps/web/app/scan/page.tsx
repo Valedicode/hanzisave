@@ -630,6 +630,7 @@ export default function ScanPage() {
                       {levelLabel(hit.point.level)}
                     </span>
                     {hit.count > 1 && <span className={styles.hint}>×{hit.count}</span>}
+                    {hit.point.brief && <span className={styles.brief}>{hit.point.brief}</span>}
                     <span className={styles.context}>
                       <Marked sentence={hit.sentence} span={hit.matched} />
                     </span>

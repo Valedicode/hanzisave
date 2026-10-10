@@ -9,6 +9,7 @@ export interface GrammarPoint {
   group: string; // 特殊句型, 复句, 补语, 固定格式, 口语格式, ...
   name: string; // what the point is called: "比较句2", "又……又……"
   en?: string; // English name of a structure or clause type; fixed patterns need none
+  brief?: string; // one line of English on what the structure does; set wherever `en` is
   desc: string; // the list's formal description; it has no explanations or examples
   frames?: string[]; // surface templates, for points that pattern matching can find
 }
