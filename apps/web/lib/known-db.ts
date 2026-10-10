@@ -18,10 +18,14 @@ export async function markKnown(items: string[]): Promise<void> {
   );
 }
 
-// Catalog grammar points the learner already has, by point id (g94): the Anki deck, points marked by hand.
+// Catalog grammar points the learner already has, by point id (g94): the Anki deck, points marked by hand,
+// and cards made from earlier scans that haven't been discarded.
 export async function loadKnownGrammar(): Promise<Set<string>> {
-  const known = await db.known.where("type").equals("grammar").toArray();
-  return new Set(known.map((k) => k.item));
+  const [known, queued] = await Promise.all([
+    db.known.where("type").equals("grammar").toArray(),
+    db.new_cards.where("status").notEqual("discarded").toArray(),
+  ]);
+  return new Set([...known.map((k) => k.item), ...queued.flatMap((c) => (c.type === "grammar" && c.pointId ? [c.pointId] : []))]);
 }
 
 // Marks grammar points as known so they stop showing up as new.
