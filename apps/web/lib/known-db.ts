@@ -17,3 +17,17 @@ export async function markKnown(items: string[]): Promise<void> {
     items.map((item) => ({ key: `word:${item}`, item, type: "word" as const, source: "manual" as const, createdAt: now })),
   );
 }
+
+// Catalog grammar points the learner already has, by point id (g94): the Anki deck, points marked by hand.
+export async function loadKnownGrammar(): Promise<Set<string>> {
+  const known = await db.known.where("type").equals("grammar").toArray();
+  return new Set(known.map((k) => k.item));
+}
+
+// Marks grammar points as known so they stop showing up as new.
+export async function markGrammarKnown(ids: string[]): Promise<void> {
+  const now = Date.now();
+  await db.known.bulkPut(
+    ids.map((item) => ({ key: `grammar:${item}`, item, type: "grammar" as const, source: "manual" as const, createdAt: now })),
+  );
+}

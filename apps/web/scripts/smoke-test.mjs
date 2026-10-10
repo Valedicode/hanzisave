@@ -3,7 +3,8 @@
 import assert from "node:assert/strict";
 import { segment } from "../lib/segment.ts";
 import { grammarPoint, grammarPoints, pointsUpToLevel } from "../lib/grammar.ts";
-import { compileFrame, detectGrammar, frameMatchers } from "../lib/grammar-detect.ts";
+import { compileFrame, detectGrammar, frameMatchers, sameFrame } from "../lib/grammar-detect.ts";
+import { matchDeckFront } from "../lib/grammar-known.ts";
 import { analyze } from "../lib/analyze.ts";
 import { supportedMax } from "../lib/level.ts";
 import { hashString } from "../lib/hash.ts";
@@ -795,6 +796,24 @@ import { join } from "node:path";
 
   assert.deepEqual(ids("他又高又帅。", { levelFloor: 3 }).filter((id) => id === "g94"), [], "a level floor hides points at or below it");
   assert.ok(!ids("他又高又帅。", { known: new Set(["g94"]) }).includes("g94"), "a known point is not new");
+}
+
+// Known grammar: a front in the deck's notation is matched to the catalog points with the same frame.
+{
+  assert.ok(sameFrame("又…又…", "又……又……"));
+  assert.ok(sameFrame("连……都……", "连……也/都……"), "a front may use one of the alternatives");
+  assert.ok(sameFrame("除了……还……", "除了……（以外），……还/也/都……"), "optional parts may be left out");
+  assert.ok(!sameFrame("越来越……", "越……越……"), "越来越 has no gap between its pieces");
+  assert.ok(!sameFrame("又……", "又……又……"), "one anchor is not a frame");
+  assert.ok(!sameFrame("所 (所 + verb)", "所……"));
+
+  const ids = (front) => matchDeckFront(front).map((p) => p.id);
+  assert.deepEqual(ids("又…又…"), ["g94", "g193"], "the level-2 pattern and its clause version");
+  assert.deepEqual(ids("因为…所以…"), ["g116"]);
+  assert.deepEqual(ids("连……也……"), ["g277"], "emphasis rows take their frame from the quoted part");
+  assert.deepEqual(ids("非……不可"), ["g413"]);
+  assert.deepEqual(ids("百分之……"), []);
+  assert.deepEqual(ids("不是……吗？"), []);
 }
 
 console.log("smoke-test: all checks passed");

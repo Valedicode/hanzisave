@@ -68,6 +68,8 @@ function descOf(group, category, details, content, name) {
 // Surface templates, where the list gives them as ……-patterns.
 function framesOf(group, category, details, content) {
   if (group === "固定格式" || group === "口语格式") return [squash(category)];
+  // 用“连……也/都……”表示强调: the quoted part is the frame.
+  if (group === "强调的方法") return [...category.matchAll(/“([^”]+)”/g)].map((m) => squash(m[1])).filter((f) => f.includes("……"));
   if (group === "句子的类型" && category === "复句") {
     const joined = content.includes("用关联词语") ? content.split(/用关联词语[：:]/)[1] ?? "" : content;
     return joined.split(/[；;\n]/).map(squash).filter((f) => f.includes("……"));
