@@ -28,6 +28,7 @@ export interface GrammarCandidate {
 export interface GrammarFinding {
   id: string;
   sentence: string;
+  words?: string; // the stretch of the sentence that shows the structure, exactly as written there
 }
 
 export interface LlmProvider {

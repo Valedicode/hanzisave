@@ -8,7 +8,7 @@ export interface GrammarHit {
   point: GrammarPoint;
   count: number; // sentences it appears in
   sentence: string; // first sentence it appears in
-  matched: string; // the part of that sentence the frame matched; empty for points the model found
+  matched: string; // the part of that sentence the frame matched, or the span the model named; may be empty
   frame?: string; // the catalog frame that matched, e.g. 一边……，一边……
 }
 
@@ -136,10 +136,10 @@ export function structureCandidates({ known, levelFloor = 0 }: GrammarScanOption
   return grammarPoints.filter((p) => !byRules.has(p.id) && !known?.has(p.id) && p.level > levelFloor);
 }
 
-// The model's findings as list entries; with no frame there is no matched span to point at.
-export function modelHits(findings: { id: string; sentence: string }[]): GrammarHit[] {
-  return findings.flatMap(({ id, sentence }) => {
+// The model's findings as list entries; the span it names stands in for the frame's match (empty if it gave none).
+export function modelHits(findings: { id: string; sentence: string; words?: string }[]): GrammarHit[] {
+  return findings.flatMap(({ id, sentence, words }) => {
     const point = grammarPoint(id);
-    return point ? [{ point, count: 1, sentence, matched: "" }] : [];
+    return point ? [{ point, count: 1, sentence, matched: words && sentence.includes(words) ? words : "" }] : [];
   });
 }
