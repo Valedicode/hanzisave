@@ -9,7 +9,8 @@ import { getAccessCode } from "@/lib/access-code";
 import { AccessNotice } from "../access-notice";
 import { buildDeckPlan, type CardType } from "@/lib/deck-plan";
 import type { Hsk30Index } from "@/lib/split-front";
-import { db, type DeckUnitRecord } from "@/lib/db";
+import { db, type DeckUnitRecord, type KnownRecord } from "@/lib/db";
+import { matchDeckFront } from "@/lib/grammar-known";
 import { mergeDeck } from "@/lib/merge-deck";
 import { BackupPanel } from "../backup-panel";
 
@@ -95,14 +96,17 @@ export default function ImportPage() {
   const setType = (row: number, t: CardType) =>
     setTypeChoices((prev) => new Map(prev).set(row, t));
 
-  const knownRecords = (now: number) =>
-    (plan?.known ?? []).map((k) => ({
-      key: `${k.type}:${k.item}`,
-      item: k.item,
-      type: k.type,
-      source: "anki" as const,
-      createdAt: now,
-    }));
+  // Grammar fronts from the deck are kept as written and, where they are a catalog pattern, also as that point.
+  const knownRecords = (now: number) => {
+    const records = new Map<string, KnownRecord>();
+    const add = (item: string, type: KnownRecord["type"]) =>
+      records.set(`${type}:${item}`, { key: `${type}:${item}`, item, type, source: "anki", createdAt: now });
+    for (const k of plan?.known ?? []) {
+      add(k.item, k.type);
+      if (k.type === "grammar") for (const point of matchDeckFront(k.item)) add(point.id, "grammar");
+    }
+    return [...records.values()];
+  };
 
   const refresh = async () => {
     const [units, known] = await Promise.all([db.deck_units.toArray(), db.known.count()]);

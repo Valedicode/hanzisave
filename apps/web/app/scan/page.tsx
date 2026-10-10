@@ -11,7 +11,7 @@ import { CardRequestError, requestCard } from "@/lib/card-client";
 import { resizeImage } from "@/lib/image-resize";
 import { CardPrefetcher, type PrefetchProgress } from "@/lib/card-prefetch";
 import { levelLabel } from "@/lib/lexicon";
-import { loadKnownWords, markKnown } from "@/lib/known-db";
+import { loadKnownGrammar, loadKnownWords, markGrammarKnown, markKnown } from "@/lib/known-db";
 import { buildAnkiTsv } from "@/lib/rewrite";
 import { detectGrammar, type GrammarHit } from "@/lib/grammar-detect";
 import { markText, scanText, type MarkedSentence, type NewWord, type ScanResult } from "@/lib/scan";
@@ -135,14 +135,19 @@ export default function ScanPage() {
   const find = async () => {
     setError("");
     setMessage("");
-    const known = await loadKnownWords();
+    const [known, knownGrammar] = await Promise.all([loadKnownWords(), loadKnownGrammar()]);
     const scanned = scanText(text, { known, levelFloor });
     setResult(scanned);
     prefetcher.start(scanned.newWords.map((w) => ({ word: w.surface, sentence: w.sentence.slice(0, 400) })));
     setMarked(markText(text, { known, levelFloor }));
-    setGrammar(detectGrammar(text, { levelFloor }));
+    setGrammar(detectGrammar(text, { known: knownGrammar, levelFloor }));
     setPreview(null);
     setSelected(new Set());
+  };
+
+  const grammarKnown = async (ids: string[]) => {
+    await markGrammarKnown(ids);
+    setGrammar((prev) => prev.filter((hit) => !ids.includes(hit.point.id)));
   };
 
   const removeFromResult = (surfaces: string[]) => {
@@ -546,6 +551,9 @@ export default function ScanPage() {
                       <b>{hit.matched}</b>
                       {hit.sentence.slice(at + hit.matched.length)}
                     </span>
+                    <button className={styles.secondary} onClick={() => grammarKnown([hit.point.id])}>
+                      I know it
+                    </button>
                   </div>
                 );
               })}
